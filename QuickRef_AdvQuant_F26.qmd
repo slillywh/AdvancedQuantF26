@@ -25,7 +25,7 @@ An annotated, searchable guide to commonly used functions in R - let's add to th
 
 - PC: Ctrl + Alt + I
 
-## New pipe %\>% or \|\>
+## New pipe \|\> or \|\>
 
 - Mac: Command + Shift + M
 
@@ -331,9 +331,9 @@ file.choose()
 # define the path (using the path from the last chunk)
 path_to_file <- "/Users/amyhenry/Desktop/The Bowl Project Analysis/BowlSpecies_forEdits.xlsx"
 
-mad <- path_to_file %>%
-        excel_sheets() %>%
-        set_names() %>%
+mad <- path_to_file |>
+        excel_sheets() |>
+        set_names() |>
        map(read_excel,
            path = path_to_file)
         
@@ -347,14 +347,14 @@ path_to_file <- "/Users/amyhenry/Desktop/The Bowl Project Analysis/BowlSpecies_f
 
 # define the new function to take the path and apply read_excel to the file at the end of the path
 read_multiple_excel <- function(path) {
-  path %>%
-    excel_sheets() %>% 
-    set_names() %>% 
+  path |>
+    excel_sheets() |> 
+    set_names() |> 
   map(read_excel, path = path, col_names = FALSE)
 }
 
 # use the map() function to apply the read_multiple_excel function to all the files in the directory/folder that have "xlsx" in their name
-data <- dir_ls(path = path_raw, regexp = "xlsx") %>% 
+data <- dir_ls(path = path_raw, regexp = "xlsx") |> 
            map(read_multiple_excel)
 
 # results in a list
@@ -387,16 +387,16 @@ seach terms: type factor character numeric using mutate
 glimpse(iris) # default the data columns are double (aka numeric) and Species is a factor
 
 # to make it a character:
-iris %>% mutate(Species = as.character(Species))
+iris |> mutate(Species = as.character(Species))
 
 # to make it a factor: 
 glimpse(mpg) # manufacturer is a character, we want it as a factor
-mpg %>% mutate(manufacturer = as.factor(manufacturer))
+mpg |> mutate(manufacturer = as.factor(manufacturer))
 
 # Integers vs. Double 
 ## both are numeric data types - only difference is how R stores them (integers are whole numbers and take up slightly less computer space)
 glimpse(mpg) 
-mpg %>% mutate(year = as.numeric(year)) # notice how it shifts to double
+mpg |> mutate(year = as.numeric(year)) # notice how it shifts to double
 ```
 
 ## Manipulating and combining multiple tables
@@ -416,9 +416,9 @@ nrow(doubleiris)
 `bind_cols()` adds columns to a data frame if there are the same number of rows, without matching. this only works if your data is in the same order!
 
 ```{r}
-iris1 <- iris %>% select(Sepal.Length, Sepal.Width)
+iris1 <- iris |> select(Sepal.Length, Sepal.Width)
 iris1
-iris2 <- iris %>% select(Petal.Length, Petal.Width)
+iris2 <- iris |> select(Petal.Length, Petal.Width)
 iris2
 
 bind_cols(iris2, iris1)
@@ -465,8 +465,8 @@ inner_join(band_members, band_instruments)
 ```{r}
 colnames(iris)
 # format
-dataframe %>% rename(NewName = OldName)
-iris %>% rename(SL = Sepal.Length, PL = Petal.Length)
+dataframe |> rename(NewName = OldName)
+iris |> rename(SL = Sepal.Length, PL = Petal.Length)
 
 ```
 
@@ -502,20 +502,20 @@ The `mutate()` function
 ```{r}
 # To make a new column
 #format
-dataframe %>% mutate(NewColumn = )
+dataframe |> mutate(NewColumn = )
 
 # make a column with unique values for each row or the same numbers for each row
-iris %>% mutate(RowNumbers = 1:nrow(iris))
+iris |> mutate(RowNumbers = 1:nrow(iris))
 
-iris %>% mutate(Constant = 27)
+iris |> mutate(Constant = 27)
 
-iris %>% mutate()
+iris |> mutate()
 
 # Make a new column with a calculation from some other column(s)
-iris %>% mutate(Sepal.Ratio = Sepal.Length/Sepal.Width)
+iris |> mutate(Sepal.Ratio = Sepal.Length/Sepal.Width)
 
 # Make a new column that depends on the numeric values of a different column with case_when()
-iris %>% mutate(BigFlower = 
+iris |> mutate(BigFlower = 
                   case_when(
                     # [For lines when this condition is true] ~ Have this value,
                     Petal.Length > 1.4 ~ "Big",
@@ -544,13 +544,13 @@ search terms: choose use select filter subset trim reduce delete columns
 glimpse(iris)
 
 # choose using column names
-iris %>% select(Sepal.Length, Sepal.Width, Species)
+iris |> select(Sepal.Length, Sepal.Width, Species)
 
 # or column numbers
-iris %>% select(1:3, 5)
+iris |> select(1:3, 5)
 
 # or both
-iris %>% select(1:2, Species)
+iris |> select(1:2, Species)
 ```
 
 ## Filter for rows that meet a condition
@@ -559,18 +559,18 @@ Choose select subset for only certain specific ROWS that meet a condition using 
 
 ```{r}
 # filter for just one
-iris %>% filter(Species == "setosa")
+iris |> filter(Species == "setosa")
 
 # rows can be either setosa OR versicolor
 # filter so that we keep BOTH setosa AND versicolor
-iris %>% filter(Species == "setosa" | Species == "versicolor") \
+iris |> filter(Species == "setosa" | Species == "versicolor") \
 
 # WRONG - no rows can be equal to setosa AND versicolor at the same time, so this returns zero rows. 
-iris %>% filter(Species == "setosa" & Species == "versicolor") 
+iris |> filter(Species == "setosa" & Species == "versicolor") 
 
 # rows must be both setosa AND greater than 1.3
-iris %>% filter(Species == "setosa" & Petal.Length > 1.3)
-iris %>% filter(Species == "setosa", Petal.Length > 1.3) # works the same as above
+iris |> filter(Species == "setosa" & Petal.Length > 1.3)
+iris |> filter(Species == "setosa", Petal.Length > 1.3) # works the same as above
 
 ```
 
@@ -591,7 +591,7 @@ pivot_longer(mydata,
   values_to # name of the new value column as a quoted string
 )
 
-iris %>% select(Petal.Length, Petal.Width, Species) %>% 
+iris |> select(Petal.Length, Petal.Width, Species) |> 
   pivot_longer(cols = c(Petal.Length, Petal.Width), 
                names_to = "Measurement", 
                values_to = "cm")
@@ -695,11 +695,11 @@ map(someirises, colSums)
 gets you the number of rows in an object. group_by() makes it count separately for different levels of a factor, or different combinations of two factors.
 
 ```{r}
-mpg %>% count()
+mpg |> count()
 
-mpg %>% group_by(manufacturer) %>% count()
+mpg |> group_by(manufacturer) |> count()
 
-mpg %>% group_by(manufacturer, model) %>% count()
+mpg |> group_by(manufacturer, model) |> count()
 ```
 
 ## uncount()
@@ -719,9 +719,9 @@ nrow(freq_table)
 sum(freq_table$n)
 # number of responses
 
-freq_table %>% uncount(n, .id = "ResponseID")
+freq_table |> uncount(n, .id = "ResponseID")
 
-freq_table %>% uncount(n, .id = "ResponseID") %>% nrow()
+freq_table |> uncount(n, .id = "ResponseID") |> nrow()
 # same as number of responses - number of rows.
 ```
 
@@ -732,11 +732,11 @@ will compute summary statistics (or other) over values in one or more columns. m
 works with group_by().
 
 ```{r}
-mpg %>% summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy))
+mpg |> summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy))
 
-mpg %>% group_by(cyl) %>% summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy), n = n())
+mpg |> group_by(cyl) |> summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy), n = n())
 
-mpg %>% group_by(manufacturer, model) %>% summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy), n = n())
+mpg |> group_by(manufacturer, model) |> summarize(MeanCityMPG = mean(cty), MeanHwyMPG = mean(hwy), n = n())
 
 ```
 
@@ -785,8 +785,8 @@ dev.off()
 
 ```{r}
 # Create a summary table
-iris_summary <- iris %>% 
-  group_by(Species) %>% 
+iris_summary <- iris |> 
+  group_by(Species) |> 
   summarize(
     n = n(), 
     MeanSL = mean(Sepal.Length), 
@@ -795,20 +795,20 @@ iris_summary <- iris %>%
     SD_SW = sd(Sepal.Width))
 
 # format the numbers so that they're in appropriate significant figures
-iris_rounded <- iris_summary %>% mutate_at(c("MeanSL", "SD_SL", "MeanSW", "SD_SW"), ~round(.,digits = 2))
+iris_rounded <- iris_summary |> mutate_at(c("MeanSL", "SD_SL", "MeanSW", "SD_SW"), ~round(.,digits = 2))
 ```
 
 ### paste or combine or merge or fuse or merge the Mean and SD columns for each variable to get a pretty looking Mean +/- SD column
 
 ```{r}
 # combine with parentheses around the standard deviation using the paste function
-iris_rounded %>% 
+iris_rounded |> 
   mutate(`Mean Sepal Length (SD)` = paste(MeanSL, " (", SD_SL,")", sep = ""))
 
 # OR
 
 # pasted with the +/- symbol
-iris_rounded %>% 
+iris_rounded |> 
   mutate(`Sepal Length (M ± SD)` = paste(MeanSL, label="±", SD_SL)) 
 # the +/- symbol was pasted in from elsewhere, I don't know how to directly type it in
 
@@ -818,7 +818,7 @@ iris_rounded %>%
 # general format: 
   # unite("New Column Name", c(Columns to Unite), sep = "what you want between them")
 
-iris_rounded %>%
+iris_rounded |>
   unite(`Sepal Length (M ± SD)`, MeanSL:SD_SL, sep = "±")
 
 ```
@@ -826,16 +826,16 @@ iris_rounded %>%
 #### Complete example of a nice table:
 
 ```{r}
-iris_table <- iris_rounded %>% 
+iris_table <- iris_rounded |> 
   mutate(`Sepal Length (M ± SD)` = paste(MeanSL, label="±", SD_SL), 
-         `Sepal Width (M ± SD)` = paste(MeanSW, label="±", SD_SW)) %>%
+         `Sepal Width (M ± SD)` = paste(MeanSW, label="±", SD_SW)) |>
   select(Species, n, `Sepal Length (M ± SD)`, `Sepal Width (M ± SD)`)
 ```
 
 #### View that table nicely with kable(), exports pretty when knitted
 
 ```{r}
-iris_table %>% knitr::kable()
+iris_table |> knitr::kable()
 ```
 
 ### Export tables to Word:
@@ -855,8 +855,8 @@ write.table(iris_summary, file = "iristable.txt", sep = ",", row.names = F)
 # COUNT and SUMMARISE or SUMMARIZE collapse many rows into few rows with the help of GROUP_BY()
 
 ```{r}
-iris %>% 
-  group_by(Species) %>% # calculate it separately for each species
+iris |> 
+  group_by(Species) |> # calculate it separately for each species
   summarize(MeanPetalLength = mean(Petal.Length),
             MeanPetalWidth = mean(Petal.Width))
 
@@ -1101,7 +1101,7 @@ ggplot(candy_rankings) +
 ```{r}
 # Visually
 
-somedata <- cbind(seq(1:50), rnorm(50, mean = 15, sd = 5)) %>% as_tibble()
+somedata <- cbind(seq(1:50), rnorm(50, mean = 15, sd = 5)) |> as_tibble()
 glimpse(somedata)
 
 hist(somedata$V2, breaks = 5) # breaks codes for the number of bins
@@ -1286,7 +1286,7 @@ Unpaired two sample t-test
 
 ```{r}
 # unpaired, two sample t-test
-twochicks <- ChickWeight %>% filter(Time == 21, Diet == 2 | Diet == 1)
+twochicks <- ChickWeight |> filter(Time == 21, Diet == 2 | Diet == 1)
 twochicks
 
 t.test(weight ~ Diet, twochicks)
@@ -1298,7 +1298,7 @@ Paired two sample t-test
 # this dataset shows heights and ages for trees that were tracked over their lifetimes. The Seed column is the unique identifier per tree.
 
 # This t-test asks if trees change size between age 20 and age 25 and compares the same trees. 
-twotimetree <- Loblolly %>% filter(age == 20 | age == 25)
+twotimetree <- Loblolly |> filter(age == 20 | age == 25)
 twotimetree
 
 t.test(height ~ age, data = twotimetree, paired = TRUE)
