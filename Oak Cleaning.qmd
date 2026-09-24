@@ -20,7 +20,7 @@ names(Survival_HeightApril26Blocks7_6Clean)
 ```
 
 ```{r}
-Survival_HeightApril26Blocks7_6Clean<-
+Survival_HeightApril26Blocks7_6Clean <-
   Survival_HeightApril26Blocks7_6Clean |> 
   rename(Page_Num = "Page #",
          Date = "MM/DD/YYYY",
@@ -38,6 +38,73 @@ Survival_HeightApril26Blocks7_6Clean<-
         RCD ="(mm)",
        Notes  ="as written on data sheet")
 ```
+
+Changing columns to be numeric
+
+```{r}
+str(Survival_HeightApril26Blocks7_6Clean)
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(Seedling_Height = as.numeric(Seedling_Height))
+
+str(Survival_HeightApril26Blocks7_6Clean)
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(Leaves_Num = as.numeric(Leaves_Num))
+
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(Dead_Leaves_Num = as.numeric(Dead_Leaves_Num))
+
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(Leaf_Greenness = as.numeric(Leaf_Greenness))
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(Germination_Num = as.numeric(Germination_Num))
+
+Survival_HeightApril26Blocks7_6Clean <- 
+  Survival_HeightApril26Blocks7_6Clean |> 
+  mutate(RCD = as.numeric(RCD))
+
+
+str(Survival_HeightApril26Blocks7_6Clean)
+
+
+```
+
+Going to check data for any outliers
+
+```{r}
+ggplot(Survival_HeightApril26Blocks7_6Clean) +
+  aes(x = Seedling_Height) + 
+  geom_bar()
+
+
+which(Survival_HeightApril26Blocks7_6Clean$Seedling_Height == 60)
+#Row 12 is a huge outlier, may consider removing 
+
+ggplot(Survival_HeightApril26Blocks7_6Clean) +
+  aes(x = RCD) + 
+  geom_bar()
+#RCD has a patch at 7.5 that could be removed
+
+
+```
+
+Going to check on repeat entries
+
+```{r}
+unique(Survival_HeightApril26Blocks7_6Clean$Tag_Num)
+#Looks like there are no repeat entries
+```
+
+Date may need to be changed for its format
 
 ```{r}
 
