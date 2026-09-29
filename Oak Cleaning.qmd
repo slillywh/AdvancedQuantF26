@@ -8,8 +8,12 @@ editor: visual
 
 ```{r}
 #install.packages("tidyverse")
-library(tidyverse)
+#install.packages("plyr")
 
+
+library(tidyverse)
+library(plyr)
+library(dplyr)
 library(readxl)
 Survival_HeightApril26Blocks7_6Clean <- 
   read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
@@ -17,6 +21,139 @@ Survival_HeightApril26Blocks7_6Clean <-
 View(Survival_HeightApril26Blocks7_6Clean)
 
 names(Survival_HeightApril26Blocks7_6Clean)
+
+
+
+oak_data <- list.files(path = "~/GitHub/AdvancedQuantF26/Oak Project/Data",
+                       pattern = "*6Clean.xlsx",
+                       full.names = TRUE) |> 
+lapply(read_excel,
+       na = "NA", sheet = "Input1",
+       skip = 1) |> 
+  bind_rows()
+```
+
+```{r}
+
+oak_data <-
+  oak_data |> 
+  dplyr::rename(Page_Num = "Page #",
+         Date = "MM/DD/YYYY",
+         Recorder ="Name",
+         Block ="#...4",
+         Tag_Num = "#...5",
+         Oak_Type ="NR, S, or A",
+         Treatment ="AC, OA, NP, DT, or DL",
+         OA_Microclimate ="TH, TI, CN",
+         Seedling_Height ="(cm)",
+         Leaves_Num ="#...10",
+         Dead_Leaves_Num ="#...11",
+         Leaf_Greenness ="%",
+         Germination_Num ="#...13",
+         RCD ="(mm)",
+         Notes  ="as written on data sheet")
+```
+
+```{r}
+oct_data <- read_excel("Oak Project/Data/Survival_HeightOct2025Clean.xlsx",
+                       sheet = 'Input1',
+                                                      skip = 1)
+oct_data <- oct_data |> 
+  dplyr::rename(Page_Num = "Page #",
+                Date = "MM/DD/YYYY",
+                Recorder = "Code",
+                Block ="#...4",
+                Tag_Num = "#...5",
+                Oak_Type ="NR, S, or A",
+                Treatment ="AC, OA, SA, NP, or DT",
+                Seedling_Height ="(cm)...8",
+                Leaves_Num ="#...9",
+                Base_Seedling_Circumference = "(cm)...10",
+                Base_Seedling_Diameter = "(mm)",
+                Alive_Dead = "Yes, No, or Missing?",
+                Notes = "as written on data sheet")
+
+oak_data_full <- full_join(oak_data, oct_data)
+
+```
+
+```{r}
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Seedling_Height = as.numeric(Seedling_Height))
+
+str(Survival_HeightApril26Blocks7_6Clean)
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Leaves_Num = as.numeric(Leaves_Num))
+
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Dead_Leaves_Num = as.numeric(Dead_Leaves_Num))
+
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Leaf_Greenness = as.numeric(Leaf_Greenness))
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Germination_Num = as.numeric(Germination_Num))
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(RCD = as.numeric(RCD))
+
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Base_Seedling_Circumference = as.numeric(Base_Seedling_Circumference))
+
+oak_data_full <- 
+  oak_data_full |> 
+  mutate(Base_Seedling_Diameter = as.numeric(Base_Seedling_Diameter))
+
+oak_data_full <- oak_data_full |> 
+  filter(Page_Num != "NA")
+
+
+
+
+oak_data_clean<- oak_data_full |> 
+  separate(Tag_Num, into = c("Tag_Num", "Acorn_Num"), sep = "A") |> 
+  mutate(Tag_Num = as.numeric(Tag_Num),
+         Acorn_Num = as.numeric(Acorn_Num))
+
+
+oak_data_clean <- oak_data_clean |>
+mutate(Dead = case_when(
+  Seedling_Height == 0 ~ "Dead",
+Seedling_Height > 0 ~ "Alive"
+))
+
+#below dont worry about
+         
+#Acorn_ID_table <- oak_data_clean |> 
+ # select(Tag_Num, Block, Treatment, OA_Microclimate, Date) |> 
+  #distinct() |> 
+  #arrange(Tag_Num) |> 
+  #mutate(Acorn1 = 1, Acorn2 = 2, Acorn3 = 3) |> 
+  #pivot_longer(cols = c(Acorn1, Acorn2, Acorn3),
+   #            names_to = "Whatever",
+    #           values_to = "Acorn_Num") |> 
+  #select(-Whatever)
+
+#oak_data_clean |> full_join(Acorn_ID_table)
+```
+
+```{r}
+#Graph Time!!
+oak_data_graph <- oak_data_clean
+ggplot(oak_data_clean) +
+  aes(x = Seedling_Height) + 
+  geom_bar()
 ```
 
 ```{r}
@@ -78,6 +215,12 @@ str(Survival_HeightApril26Blocks7_6Clean)
 
 ```
 
+Need to separate the tag numbers from the acorn numbers. Will need to create a new column
+
+```{r}
+
+```
+
 Going to check data for any outliers
 
 ```{r}
@@ -103,8 +246,6 @@ Going to check on repeat entries
 unique(Survival_HeightApril26Blocks7_6Clean$Tag_Num)
 #Looks like there are no repeat entries
 ```
-
-Date may need to be changed for its format
 
 ```{r}
  
