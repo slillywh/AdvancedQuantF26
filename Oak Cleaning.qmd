@@ -31,6 +31,8 @@ lapply(read_excel,
        na = "NA", sheet = "Input1",
        skip = 1) |> 
   bind_rows()
+
+unloadNamespace("plyr")
 ```
 
 ```{r}
@@ -130,6 +132,9 @@ oak_data_clean<- oak_data_full |>
 oak_data_clean <- oak_data_clean |>
 mutate(Dead = case_when(
   Seedling_Height == 0 ~ "Dead",
+  Seedling_Height == "NA" ~ "Dead",
+  Seedling_Height == NA ~ "Dead",
+  Seedling_Height == "NA" & Alive_Dead == "missing" ~ "missing",
 Seedling_Height > 0 ~ "Alive"
 ))
 
@@ -173,99 +178,37 @@ ggplot(oak_data_clean)+
   aes(x = Dead)+
   geom_bar()
 #There are a ton of NA's, what does this mean in context to dead or alive?
-```
 
-```{r}
-#Survival_HeightApril26Blocks7_6Clean <-
- # Survival_HeightApril26Blocks7_6Clean |> 
-#  rename(Page_Num = "Page #",
- #        Date = "MM/DD/YYYY",
-  #       Recorder ="Name",
-   #     Block ="#...4",
-    #    Tag_Num = "#...5",
-     #   Oak_Type ="NR, S, or A",
-      #  Treatment ="AC, OA, NP, DT, or DL",
-      #   OA_Microclimate ="TH, TI, CN",
-       # Seedling_Height ="(cm)",
-      #  Leaves_Num ="#...10",
-       # Dead_Leaves_Num ="#...11",
-        #Leaf_Greenness ="%",
-        #Germination_Num ="#...13",
-        #RCD ="(mm)",
-       #Notes  ="as written on data sheet")
-```
+ggplot(oak_data_clean)+
+  aes(x = Seedling_Height, fill = Treatment)+
+  geom_bar()
 
-Changing columns to be numeric
+ggplot(oak_data_clean)+
+  aes(x = Treatment, y = Seedling_Height, fill = OA_Microclimate)+
+  geom_boxplot()
 
-```{r}
-#str(Survival_HeightApril26Blocks7_6Clean)
+ggplot(oak_data_clean)+
+  aes(x = Treatment)+
+  geom_bar()
 
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(Seedling_Height = as.numeric(Seedling_Height))
-
-#str(Survival_HeightApril26Blocks7_6Clean)
-
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(Leaves_Num = as.numeric(Leaves_Num))
-
-
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(Dead_Leaves_Num = as.numeric(Dead_Leaves_Num))
-
-
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(Leaf_Greenness = as.numeric(Leaf_Greenness))
-
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(Germination_Num = as.numeric(Germination_Num))
-
-#Survival_HeightApril26Blocks7_6Clean <- 
- # Survival_HeightApril26Blocks7_6Clean |> 
-  #mutate(RCD = as.numeric(RCD))
-
-
-#str(Survival_HeightApril26Blocks7_6Clean)
 
 
 ```
 
-Need to separate the tag numbers from the acorn numbers. Will need to create a new column
+- My goal will be to look at Micro climate (DT/AC/OA) and their effect on seedling height and greenness and RCD
+
+- Goals:
+
+  - Focus and isolate DT,AC, and OA treatments
+
+  - Acorns (at the end) vs natural recruits (NR) overtime (analyze separately)
+
+  - Get rid of all NA's for height and greenness
+
+  - ANOVA for your statistical test (Our response is quantitative, or predictor is categorical)
+
+    - For Tuesday, have the data fully cleaned to prepare for the question
 
 ```{r}
 
-```
-
-Going to check data for any outliers
-
-```{r}
-#ggplot(Survival_HeightApril26Blocks7_6Clean) +
- # aes(x = Seedling_Height) + 
-  #geom_bar()
-
-
-#which(Survival_HeightApril26Blocks7_6Clean$Seedling_Height == 60)
-#Row 12 is a huge outlier, may consider removing 
-
-#ggplot(Survival_HeightApril26Blocks7_6Clean) +
- # aes(x = RCD) + 
-  #geom_bar()
-#RCD has a patch at 7.5 that could be removed
-
-
-```
-
-Going to check on repeat entries
-
-```{r}
-#unique(Survival_HeightApril26Blocks7_6Clean$Tag_Num)
-#Looks like there are no repeat entries
-```
-
-```{r}
- 
 ```
