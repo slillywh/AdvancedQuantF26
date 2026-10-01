@@ -18,9 +18,9 @@ library(readxl)
 Survival_HeightApril26Blocks7_6Clean <- 
   read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
                                                    sheet = "Input1", skip = 1)
-View(Survival_HeightApril26Blocks7_6Clean)
+#View(Survival_HeightApril26Blocks7_6Clean)
 
-names(Survival_HeightApril26Blocks7_6Clean)
+#names(Survival_HeightApril26Blocks7_6Clean)
 
 
 
@@ -209,6 +209,12 @@ ggplot(oak_data_clean)+
 
     - For Tuesday, have the data fully cleaned to prepare for the question
 
-```{r}
+- Task 1: Data Cleaning
 
+  - The data is mostly clean, need to edit the data set a bit
+
+```{r}
+#Isolating treatments 
+
+Height_Green_RCD <- oak_data
 ```
