@@ -15,9 +15,9 @@ library(tidyverse)
 library(plyr)
 library(dplyr)
 library(readxl)
-Survival_HeightApril26Blocks7_6Clean <- 
-  read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
-                                                   sheet = "Input1", skip = 1)
+#Survival_HeightApril26Blocks7_6Clean <- 
+  #read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
+                                 #                  sheet = "Input1", skip = 1)
 #View(Survival_HeightApril26Blocks7_6Clean)
 
 #names(Survival_HeightApril26Blocks7_6Clean)
@@ -216,5 +216,18 @@ ggplot(oak_data_clean)+
 ```{r}
 #Isolating treatments 
 
-Height_Green_RCD <- oak_data
+Height_Green_RCD <- oak_data |> 
+  filter(Treatment == "DT"|
+         Treatment == "AC"|
+         Treatment == "OA")
+#Removing NAs for height and greenness
+
+Height_Green_RCD <- Height_Green_RCD |> 
+  filter(Seedling_Height > 0) |> 
+  mutate(Leaf_Greenness = as.numeric(Leaf_Greenness))
+
+#There are some entries that contain a height but not a leaf greenness, and RCD.. etc, will need to split them up into three different dfs
+
+HGRAcorn <- Height_Green_RCD |> 
+  filter()
 ```
