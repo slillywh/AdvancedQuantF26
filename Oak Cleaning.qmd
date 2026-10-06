@@ -15,12 +15,12 @@ library(tidyverse)
 library(plyr)
 library(dplyr)
 library(readxl)
-Survival_HeightApril26Blocks7_6Clean <- 
-  read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
-                                                   sheet = "Input1", skip = 1)
-View(Survival_HeightApril26Blocks7_6Clean)
+#Survival_HeightApril26Blocks7_6Clean <- 
+  #read_excel("Oak Project/Data/Survival_HeightApril26Blocks7&6Clean.xlsx", 
+                                 #                  sheet = "Input1", skip = 1)
+#View(Survival_HeightApril26Blocks7_6Clean)
 
-names(Survival_HeightApril26Blocks7_6Clean)
+#names(Survival_HeightApril26Blocks7_6Clean)
 
 
 
@@ -199,16 +199,55 @@ ggplot(oak_data_clean)+
 
 - Goals:
 
-  - Focus and isolate DT,AC, and OA treatments
+  - Focus and isolate DT,AC, and OA treatments (DONE)
 
-  - Acorns (at the end) vs natural recruits (NR) overtime (analyze separately)
+  - Acorns (at the end) vs natural recruits (NR) overtime (analyze separately) (DONE)
 
-  - Get rid of all NA's for height and greenness
+  - Get rid of all NA's for height and greenness (DONE)
 
   - ANOVA for your statistical test (Our response is quantitative, or predictor is categorical)
 
     - For Tuesday, have the data fully cleaned to prepare for the question
 
+- Task 1: Data Cleaning
+
+  - The data is mostly clean, need to edit the data set a bit
+
 ```{r}
+#Isolating treatments 
+
+Height_Green_RCD <- oak_data |> 
+  filter(Treatment == "DT"|
+         Treatment == "AC"|
+         Treatment == "OA")
+#Removing NAs for height and greenness
+
+Height_Green_RCD <- Height_Green_RCD |> 
+  filter(Seedling_Height > 0) |> 
+  mutate(Leaf_Greenness = as.numeric(Leaf_Greenness))
+
+#There are some entries that contain a height but not a leaf greenness, and RCD.. etc, will need to split them up into three different dfs
+#That also means I will need to seperate them further into Acorns vs New Recruits 
+#I will branch between new recruits and acorns first 
+
+HGR_Acorn <- Height_Green_RCD |> 
+  filter(Oak_Type == "A")
+
+HGR_Recruit <- Height_Green_RCD |> 
+  filter(Oak_Type == "NR")
+
+#Native Recruit Dataset ready to go, acorn dataset may need a bit more
+
+#For acorn: Height has no NAs, while Greenness and RCD have NAs
+#Will need to split up the dataset into Greenness and RCD
+
+Acorn_Green <- HGR_Acorn |> 
+  filter(!is.na(Leaf_Greenness))
+
+Acorn_RCD <-HGR_Acorn |> 
+  filter(!is.na(RCD))
+
 
 ```
+
+- The data is cleaned and ready to go for analysis!!
