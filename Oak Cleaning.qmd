@@ -84,7 +84,7 @@ oak_data_full <-
   oak_data_full |> 
   mutate(Seedling_Height = as.numeric(Seedling_Height))
 
-str(Survival_HeightApril26Blocks7_6Clean)
+#str(Survival_HeightApril26Blocks7_6Clean)
 
 oak_data_full <- 
   oak_data_full |> 
@@ -216,10 +216,13 @@ ggplot(oak_data_clean)+
 ```{r}
 #Isolating treatments 
 
-Height_Green_RCD <- oak_data |> 
+Height_Green_RCD <- oak_data_clean |> 
   filter(Treatment == "DT"|
          Treatment == "AC"|
-         Treatment == "OA")
+         Treatment == "OA") |> 
+  mutate(Date = as.Date(Date, format = "%d.%m.%y"))
+
+str(Height_Green_RCD)
 #Removing NAs for height and greenness
 
 Height_Green_RCD <- Height_Green_RCD |> 
@@ -251,3 +254,127 @@ Acorn_RCD <-HGR_Acorn |>
 ```
 
 - The data is cleaned and ready to go for analysis!!
+
+```{r}
+#exploratory analysis (october data removed for first graph)
+
+HGR_Acorn |> 
+  filter(Date != "2025-10-21") |> 
+ggplot()+
+  aes(x = Date, y=Seedling_Height)+
+  geom_point()#+
+  #geom_line(aes(group =Tag_Num, color = factor(Acorn_Num)))
+HGR_Acorn |> 
+  #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Seedling_Height)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Planted Acorn Seedling Height")
+
+
+HGR_Recruit |> 
+  #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Seedling_Height)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Natural Recruit Seedling Height")
+
+#Both data are very skewed for height 
+
+Acorn_Green |> 
+#filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Leaf_Greenness)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Planted Acorn Leaf Greenness")
+
+
+HGR_Recruit |> 
+ # filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Leaf_Greenness)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Natural Recruit Leaf Greenness")
+
+#Even more skewed for greenness
+
+Acorn_RCD |> 
+#filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=RCD)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Planted Acorn RCD")
+
+
+HGR_Recruit |> 
+  filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=RCD)+
+  geom_bar()+
+  #geom_jitter(color = "red")+
+  labs(title = "Natural Recruit RCD")
+#RCD is a little better?
+#Still really difficult data to work with
+
+HGR_Acorn |> 
+  #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=Seedling_Height)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Planted Acorn Seedling Height")
+
+HGR_Recruit |> 
+ #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=Seedling_Height)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Natural Recruit Seedling Height")
+
+Acorn_RCD |> 
+ # filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=RCD)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Planted Acorn RCD")
+
+HGR_Recruit |> 
+ # filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=RCD)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Natural Recruit RCD")
+
+
+Acorn_Green |> 
+  #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=Leaf_Greenness)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Planted Acorn Leaf Greenness")
+
+
+HGR_Recruit |> 
+  #filter(Date != "2025-10-21") |>
+  ggplot()+
+  aes(x=Treatment, y=Leaf_Greenness)+
+  geom_boxplot()+
+  geom_jitter(color = "red")+
+  labs(title = "Natural Recruit Leaf Greenness")
+
+```
+
+-Consider October as period one, and the rest as period 2
+
+-Natural recruits look at over time (connected dot plots)
+
+-For Thursday, One graph per variable considered presentation ready (one big one to present)
