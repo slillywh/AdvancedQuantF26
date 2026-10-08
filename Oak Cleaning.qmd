@@ -378,3 +378,62 @@ HGR_Recruit |>
 -Natural recruits look at over time (connected dot plots)
 
 -For Thursday, One graph per variable considered presentation ready (one big one to present)
+
+```{r}
+#Going to create a series over time graph for natural recruits
+
+HGR_Recruit |> 
+  filter(Date != "2025-10-21") |> 
+  ggplot()+
+  aes(x = Date, y=Seedling_Height)+
+  geom_point(size = 2.5)+
+geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 65))+
+  labs(x= "Date", y="Seedling Height (cm)", title="Naturally Recruited Acorns' Seedling Height Over Time", color = "Acorn Number" )+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        axis.title.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 11, color = "black"),
+        legend.title = element_text(size = 12, color = "black"))
+
+
+#Looks good! Going to do the same with Regular Acorns
+
+
+HGR_Acorn |> 
+filter(Date != "2025-10-21") |> 
+  filter(Tag_Num < 250) |> 
+  ggplot()+
+  aes(x = Date, y=Seedling_Height)+
+  geom_point(size = 2.5)+
+  geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 50))+
+  labs(x= "Date", y="Seedling Height (cm)", title="Planted Acorns' Seedling Height Over Time (1)", color = "Acorn Number" )+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        axis.title.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 11, color = "black"),
+        legend.title = element_text(size = 12, color = "black"))
+
+
+HGR_Acorn |> 
+  filter(Date != "2025-10-21") |> 
+  filter(Tag_Num > 250) |> 
+  ggplot()+
+  aes(x = Date, y=Seedling_Height)+
+  geom_point(size = 2.5)+
+  geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 20))+
+  labs(x= "Date", y="Seedling Height (cm)", title="Planted Acorns' Seedling Height Over Time (2)", color = "Acorn Number" )+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        axis.title.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 11, color = "black"),
+        legend.title = element_text(size = 12, color = "black"))
+```
