@@ -381,6 +381,7 @@ HGR_Recruit |>
 
 ```{r}
 #Going to create a series over time graph for natural recruits
+HGR_Acorn$Acorn_Num[is.na(HGR_Acorn$Acorn_Num)] = 1
 
 HGR_Recruit |> 
   filter(Date != "2025-10-21") |> 
@@ -405,14 +406,36 @@ geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
 HGR_Acorn |> 
 filter(Date != "2025-10-21") |> 
   filter(Tag_Num < 250) |> 
+  mutate(Combo = paste(Tag_Num, Acorn_Num, sep = "-A")) |> 
+  ggplot()+
+  aes(x = Date, y=Seedling_Height)+
+  geom_point(size = 2.5)+
+  geom_line(aes(group =Combo, color = factor(Combo)), linewidth=1)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 50))+
+  facet_wrap(.~Treatment)+
+  labs(x= "Date", y="Seedling Height (cm)", title="Planted Acorns' Seedling Height Over Time (1)", color = "Acorn Number" )+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 6, color = "black"),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        axis.title.y = element_text(size = 12, color = "black"),
+        legend.text = element_text(size = 11, color = "black"),
+        legend.title = element_text(size = 12, color = "black"))
+
+
+HGR_Acorn |> 
+  filter(Date != "2025-10-21") |> 
+  filter(Tag_Num < 250) |> 
+  #mutate(Combo = paste(Tag_Num, Acorn_Num, sep = "-A")) |> 
   ggplot()+
   aes(x = Date, y=Seedling_Height)+
   geom_point(size = 2.5)+
   geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
   scale_y_continuous(expand = c(0, 0), limits = c(0, 50))+
+  facet_wrap(.~Treatment)+
   labs(x= "Date", y="Seedling Height (cm)", title="Planted Acorns' Seedling Height Over Time (1)", color = "Acorn Number" )+
   theme_bw()+
-  theme(axis.text.x = element_text(size = 12, color = "black"),
+  theme(axis.text.x = element_text(size = 6, color = "black"),
         axis.text.y = element_text(size = 12, color = "black"),
         axis.title.x = element_text(size = 12, color = "black"),
         axis.title.y = element_text(size = 12, color = "black"),
@@ -423,14 +446,16 @@ filter(Date != "2025-10-21") |>
 HGR_Acorn |> 
   filter(Date != "2025-10-21") |> 
   filter(Tag_Num > 250) |> 
+  mutate(Combo = paste(Tag_Num, Acorn_Num, sep = "-A")) |>
   ggplot()+
   aes(x = Date, y=Seedling_Height)+
   geom_point(size = 2.5)+
-  geom_line(aes(group =Tag_Num, color = factor(Tag_Num)), linewidth=1)+
+  geom_line(aes(group =Combo, color = factor(Combo)), linewidth=1)+
   scale_y_continuous(expand = c(0, 0), limits = c(0, 20))+
   labs(x= "Date", y="Seedling Height (cm)", title="Planted Acorns' Seedling Height Over Time (2)", color = "Acorn Number" )+
+  facet_wrap(.~Treatment)+
   theme_bw()+
-  theme(axis.text.x = element_text(size = 12, color = "black"),
+  theme(axis.text.x = element_text(size = 6, color = "black"),
         axis.text.y = element_text(size = 12, color = "black"),
         axis.title.x = element_text(size = 12, color = "black"),
         axis.title.y = element_text(size = 12, color = "black"),
