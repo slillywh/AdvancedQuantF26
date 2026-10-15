@@ -462,3 +462,21 @@ HGR_Acorn |>
         legend.text = element_text(size = 11, color = "black"),
         legend.title = element_text(size = 12, color = "black"))
 ```
+
+TIME FOR SOME MODELING
+
+```{r}
+library(lme4)
+library(lmerTest)
+
+Height_Green_RCD_FULL <- lm(Seedling_Height~Treatment+Oak_Type+(1/Block), data =Height_Green_RCD )
+  summary(Height_Green_RCD_FULL)
+  
+  #Between Natural Recruits, Seedlings, and A acorns, there were obvious differences in their heights
+  
+  #Main effects model
+  HGR_Acorn_Height_Full <- lm(Seedling_Height~Treatment+(1/Block), data = HGR_Acorn)
+  summary(HGR_Acorn_Height_Full)
+  
+  #There was a difference between 
+```
