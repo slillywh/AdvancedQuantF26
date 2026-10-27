@@ -1,0 +1,27 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+Oak Data Research Questions
+
+- Are there differences in germination rates of acorns between treatments?
+
+- Are there differences in seedling growth rates between treatments (microhabitats)?
+
+- Which microclimates had the highest rate of natural recruits?
+
+- In which microclimates were the plants healthiest (e.g., highest leaf greenness)?
+
+For each question:
+
+- which data can we use?
+
+- which data do we need to exclude to appropriately answer the question?
+
+  - Are all time points necessary? Which factors are most valuable and present a relevant comparison?
+
+- What is the best way to visualize the data?
+
+- Is there an appropriate test to test for statistical significance of an observed difference?

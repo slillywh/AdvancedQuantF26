@@ -1,0 +1,48 @@
+---
+title: "PCA Focal Project"
+author: "Dana Briggs"
+date: "2/20/2022"
+output: html_document
+---
+
+data: all_data2
+PCA Testing for Turbidity, PPFD, Temp, Chlorophyll
+```{r}
+response_variables_noStable <- response_variables_data %>% select(-Stable) %>% drop_na()
+```
+
+```{r}
+PCA <- prcomp(response_variables_noStable, scale = TRUE, center = TRUE)
+summary(PCA)
+```
+
+```{r}
+PCA1_graph <- fviz_pca_biplot(PCA, xlab = "PC1 (36%)", ylab = "PC2 (30%)", repel = TRUE, col.var = "black", col.ind = "gray", title = "", label = "var") + theme_base()
+```
+PCA Testing for Turbidity, PPFD, Temp, Chlorophyll, ForelUleColorCategory, BottomDepth_ft
+```{r}
+all_data2$ForelUleColorCategory <- as.integer(all_data2$ForelUleColorCategory) 
+
+
+PCA_data2 <- select(all_data2, Turbidity_NTU, Temp_C, DO_mg.L, DO_percent, PPFD, CorrectedConcentration_ug.L, BottomDepth_ft, ForelUleColorCategory) %>% drop_na() 
+```
+
+```{r}
+PCA2 <- prcomp(PCA_data2, scale = TRUE, center = TRUE)
+summary(PCA2)
+```
+```{r}
+PCA2_graph <- fviz_pca_biplot(PCA2, xlab = "PC1 (34%)", ylab = "PC2 (27%)", repel = TRUE, col.var = "black", col.ind = "gray", title = "", label = "var") + theme_base() 
+```
+
+```{r}
+PCA1_graph|PCA2_graph
+```
+
+
+
+# Multiple Factor Analysis
+```{r}
+
+```
+

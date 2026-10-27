@@ -1,0 +1,975 @@
+---
+title: "NBWQ Analysis"
+author: "Matthew Walsh"
+date: "1/10/2022"
+date edited: "2/25/2022"
+---
+Notes:
+At this stage, data transformation is avoided, 
+# Setup
+## Packages
+```{r install/load packages}
+list.of.packages <-
+  c("tidyverse", "ggplot2", "papeR", "car", "rcompanion", "chron", "vegan", "rstatix", "PerformanceAnalytics", "psych")
+new.packages <-
+  list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(tidyverse)
+library(ggplot2)
+library(papeR)
+library(chron)
+library(vegan)
+library(PerformanceAnalytics)
+library(psych)
+```
+## read and tidy data
+```{r data download and minor fixes}
+data1<-read.csv("2-20-2022_NBWQ_Data.csv")
+data1[data1 ==""]<- NA
+data1[data1 =="NA"]<- NA
+data1<-rename(data1, "Vial#_Turbidity" = "Vial._Turbidity")
+data1<-rename(data1, "DO_%" = "DO_.")
+
+tide1<-read.csv("NOAA-MLLW_Tides_minute_2021-22.csv")
+tide1<-rename(tide1, "PredictedTide" = "pred")
+tide_highlow<-read.csv("NOAA-MLLW_Tides_High-Low_2021-22.csv")
+chlA<- read.csv("ZP_ChlorophyllData_TIDY_02-03-2022.csv")
+
+data1
+tide1
+tide_highlow
+chlA
+```
+
+```{r unite date & time}
+#For sake of simplicity, we will substitute the HOBOtime into the Blank spaces of SampleTime_Water
+data1<-data1 %>% 
+  mutate(SampleTime_Water = ifelse(is.na(data1$SampleTime_Water), data1$HOBOtime, data1$SampleTime_Water)) %>% 
+  unite(col = "Date", Month, Day, Year, sep = "/") %>% 
+  unite(col = "DateTime", Date, SampleTime_Water, sep = " ", remove = "FALSE")
+  
+tide1<-tide1 %>% 
+  unite(col = "DateTime", date, time, sep = " ", remove = "FALSE")
+tide_highlow<-tide_highlow %>% 
+  unite(col = "DateTime", date, time, sep = " ", remove = "FALSE")
+```
+
+```{r Fix DateTime For tides and survey data}
+data2 <- data1 %>%  mutate(DateTime = format(strptime(DateTime, "%m/%d/%Y %H:%M"))) %>% 
+  mutate(DateTime = as.POSIXct(DateTime))
+tide2 <- tide1 %>%  mutate(DateTime = format(strptime(DateTime, "%m/%d/%Y %H:%M"))) %>% 
+  mutate(DateTime = as.POSIXct(DateTime))
+#lubridate and POSIXct lack time exclusive object classes, chron must be used instead
+tide2$time <- chron(times=t(as.data.frame(strsplit(tide2$time,' '))),format=('h:m:s'))
+
+tide_highlow2 <- tide_highlow %>%  mutate(DateTime = format(strptime(DateTime, "%m/%d/%Y %H:%M"))) %>% 
+  mutate(DateTime = as.POSIXct(DateTime))
+```
+
+```{r tranform date field}
+#date field must be transformed into factor and told what specific order it should have for later graphs
+data2$Date <- factor(data2$Date, levels = c("12/4/2021", "12/15/2021", "1/8/2022", "1/16/2022", "1/23/2022", "2/5/2022", "2/20/2022"))
+tide2$date <- factor(tide2$date, levels = c("12/4/2021", "12/15/2021", "1/8/2022", "1/16/2022", "1/23/2022", "2/5/2022", "2/20/2022"))
+```
+
+```{r create new TideChange column}
+tide2 <- tide2 %>% mutate(TideChange = (PredictedTide-lag(PredictedTide)))
+#found and removed 4 outliers for TideChange resulting from disjunction in tides across sampling dates
+##  to test for outliers of this type, turn off code below code run unique(tide2$TideChange) and select (number of sample dates)-1 most extreme values
+tide2$TideChange[abs(tide2$TideChange) >= 0.1] <- NA
+```
+
+```{r merge highlow column to tide2}
+tide3 <- merge(x = tide2, y = tide_highlow2[ , c("DateTime", "highlow")], by = "DateTime", all.x=TRUE)
+```
+
+```{r Create a tide direction column based on highlow column }
+# assign ingoing/outgoing water flow based on time using ifelse()
+tide_final <- mutate(tide3,
+                     Flow = ifelse(tide3$DateTime>=as.POSIXct("2021-12-04 00:00:00") & tide3$DateTime<=as.POSIXct("2021-12-04 01:49:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-04 01:49:00") & tide3$DateTime<=as.POSIXct("2021-12-04 08:12:00"), "in", 
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-04 08:12:00") & tide3$DateTime<=as.POSIXct("2021-12-04 15:29:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-04 15:29:00") & tide3$DateTime<=as.POSIXct("2021-12-04 21:57:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-04 21:57:00") & tide3$DateTime<=as.POSIXct("2021-12-04 23:59:00"), "out",
+                                   
+                            ifelse(tide3$DateTime>=as.POSIXct("2021-12-15 00:00:00") & tide3$DateTime<=as.POSIXct("2021-12-15 00:09:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-15 00:09:00") & tide3$DateTime<=as.POSIXct("2021-12-15 06:32:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-15 06:32:00") & tide3$DateTime<=as.POSIXct("2021-12-15 13:40:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-15 13:40:00") & tide3$DateTime<=as.POSIXct("2021-12-15 19:53:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2021-12-15 19:53:00") & tide3$DateTime<=as.POSIXct("2021-12-15 23:59:00"), "out",
+                                   
+                            ifelse(tide3$DateTime>=as.POSIXct("2022-01-08 00:00:00") & tide3$DateTime<=as.POSIXct("2022-01-08 02:08:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-08 02:08:00") & tide3$DateTime<=as.POSIXct("2022-01-08 07:57:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-08 07:57:00") & tide3$DateTime<=as.POSIXct("2022-01-08 13:21:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-08 13:21:00") & tide3$DateTime<=as.POSIXct("2022-01-08 20:01:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-08 20:01:00") & tide3$DateTime<=as.POSIXct("2022-01-08 23:59:00"), "in",
+                                   
+                            ifelse(tide3$DateTime>=as.POSIXct("2022-01-16 00:00:00") & tide3$DateTime<=as.POSIXct("2022-01-16 01:26:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-16 01:26:00") & tide3$DateTime<=as.POSIXct("2022-01-16 07:41:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-16 07:41:00") & tide3$DateTime<=as.POSIXct("2022-01-16 15:04:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-16 15:04:00") & tide3$DateTime<=as.POSIXct("2022-01-16 21:38:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-16 21:38:00") & tide3$DateTime<=as.POSIXct("2022-01-16 23:59:00"), "out",
+                            
+                            ifelse(tide3$DateTime>=as.POSIXct("2022-01-23 00:00:00") & tide3$DateTime<=as.POSIXct("2022-01-23 00:50:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-23 00:50:00") & tide3$DateTime<=as.POSIXct("2022-01-23 06:24:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-23 06:24:00") & tide3$DateTime<=as.POSIXct("2022-01-23 12:01:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-23 12:01:00") & tide3$DateTime<=as.POSIXct("2022-01-23 18:35:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-01-23 18:35:00") & tide3$DateTime<=as.POSIXct("2022-01-23 23:59:00"), "in",
+                                 
+                            ifelse(tide3$DateTime>=as.POSIXct("2022-02-05 00:00:00") & tide3$DateTime<=as.POSIXct("2022-02-05 00:08:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-05 00:08:00") & tide3$DateTime<=as.POSIXct("2022-02-05 05:55:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-05 05:55:00") & tide3$DateTime<=as.POSIXct("2022-02-05 11:44:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-05 11:44:00") & tide3$DateTime<=as.POSIXct("2022-02-05 18:10:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-05 18:10:00") & tide3$DateTime<=as.POSIXct("2022-02-05 23:59:00"), "in",
+                                   
+                            ifelse(tide3$DateTime>=as.POSIXct("2022-02-20 00:00:00") & tide3$DateTime<=as.POSIXct("2022-02-20 05:09:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-20 05:09:00") & tide3$DateTime<=as.POSIXct("2022-02-20 11:03:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-20 11:03:00") & tide3$DateTime<=as.POSIXct("2022-02-20 17:14:00"), "out",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-20 17:14:00") & tide3$DateTime<=as.POSIXct("2022-02-20 23:47:00"), "in",
+                            ifelse(tide3$DateTime>as.POSIXct("2022-02-20 23:47:00") & tide3$DateTime<=as.POSIXct("2022-02-20 23:59:00"), "out",       
+                                   NA))))))))))))))))))))))))))))))))))))
+```
+
+```{r fix object classes}
+data2$Site <- as.factor(data2$Site) 
+data2$Bed_Stability <- as.factor(data2$Bed_Stability)
+data2$CurrentDirection <- as.factor(data2$CurrentDirection)
+data2$PPFD <- as.numeric(data2$PPFD)
+data2$ForelUleColorCategory<-as.integer(data2$ForelUleColorCategory)
+```
+
+```{r Make selections for what will be included in joined data frames}
+data2<- data2 %>% select(c("Site", "Bed_Stability", "Date", "DateTime", "Turbidity_NTU","Sample_ID",  "CurrentDirection", "Temp_C", "DO_mg.L", "DO_%", "Depth_PAR", "PPFD", "BottomDepth_ft", "VegDepth_ft",  "ForelUleColorCategory"))
+
+tide_final<- tide_final %>% select(c("DateTime", "date", "time", "PredictedTide", "TideChange", "highlow", "Flow"))
+
+chlA2<- chlA %>% select(c("Sample_ID", "F_Value", "ug.L", "Dilution", "CalculatedConcentration_ug.L", "CorrectedConcentration_ug.L"))
+
+```
+
+```{r Join 1}
+fieldXchlA_join<- data2 %>% left_join(chlA2, by = "Sample_ID")
+fieldXchlA_join$Sample_ID <- as.factor(fieldXchlA_join$Sample_ID)
+```
+```{r Join 2}
+data_join<- fieldXchlA_join %>% left_join(tide_final, by = "DateTime")
+```
+
+## Daywide treatment averages
+```{r}
+SummaryData<-data_join %>%
+  group_by(Date, Bed_Stability) %>% 
+  dplyr::summarise(mean_temp = mean(Temp_C),
+            se_temp = sd(Temp_C)/sqrt(length(Temp_C)),
+            mean_DO = mean(DO_mg.L),
+            se_DO = sd(DO_mg.L)/sqrt(length(DO_mg.L)),
+            mean_NTU = mean(Turbidity_NTU),
+            se_NTU = sd(Turbidity_NTU)/sqrt(length(Turbidity_NTU)),
+            mean_PPFD = mean(PPFD),
+            se_PPFD = sd(PPFD)/sqrt(length(PPFD)),
+            median_color = median(ForelUleColorCategory),
+            #not sure how to tell medain() to round the values to whole numbers
+            se_color = sd(ForelUleColorCategory)/sqrt(length(ForelUleColorCategory)),
+            mean_CorConc = mean(CorrectedConcentration_ug.L),
+            se_CorConc = sd(CorrectedConcentration_ug.L)/sqrt(length(CorrectedConcentration_ug.L))
+            )
+SummaryData
+
+SummaryBySite<-data_join %>%
+  filter(!is.na(PPFD)) %>% 
+group_by(Site, Bed_Stability) %>% 
+  dplyr::summarise(mean_temp = mean(Temp_C),
+            se_temp = sd(Temp_C)/sqrt(length(Temp_C)),
+            mean_DO = mean(DO_mg.L),
+            se_DO = sd(DO_mg.L)/sqrt(length(DO_mg.L)),
+            mean_NTU = mean(Turbidity_NTU),
+            se_NTU = sd(Turbidity_NTU)/sqrt(length(Turbidity_NTU)),
+            mean_PPFD = mean(PPFD),
+            se_PPFD = sd(PPFD)/sqrt(length(PPFD)),
+            median_color = median(ForelUleColorCategory),
+            #not sure how to tell medain() to round the values to whole numbers
+            mean_CorConc = mean(CorrectedConcentration_ug.L),
+            se_CorConc = sd(CorrectedConcentration_ug.L)/sqrt(length(CorrectedConcentration_ug.L))
+            )
+SummaryBySite
+```
+```{r saving data frames}
+#save(data_join, file = "NBWQ-FocalProject_PRIMARY_20220225.Rdata")
+#write.csv(data_join, "NBWQ-FocalProject_Primary_20220225.csv", row.names = FALSE)
+```
+
+#Questions
+##Question Summary
+DANA
+1.  Is there an association between light availability and eelgrass bed stability?
+
+2. Is tempurature and chlorophyll significatnly different between stable and ephemeral sites?(multiple logistic regression)
+
+3.  How do chlorophyll levels impact light availability in the lower bay?
+
+*BONUS QUESTION: What other factors correlate with high/increased chlorophyll?
+
+MATTHEW
+4.	How do differences between daily high and low tides impact data
+
+5.	Are more extreme high and low tides associated with lower quantities of light scattering materials in the water column
+
+6.	Are lower average daily tidal ranges associated with higher levels of light scattering materials in the water column 
+
+BONUS: Correlation between temperature, salinity, and their impact on DO. Test for good data.
+
+BONUS: Forel-Ule color test comparing color trends between sites
+
+BONUS: Does increased distance from the harbor mouth negatively impact water quality factors [DO, turbidity, color, light availability PAR,]?
+
+```[BRAINSTORM]
+Dependent		     Independent	    Test                  Purpose/description
+
+Turbidity		    ←	Depth	        	Regression	        	Observe if depth may correlate with some other variable ↑ NTU such as current		
+Color           ←	tide/depth    	ANOVA(2way???)	    	Indiv assessment of depth impact on color
+Chlorophyll     ←	Temperature	    Regression	        	Indiv assessment of Temp impact on chlorophyll
+Turbidity		    ←	|tide change|   Regression	        	Indiv assessment of tide change impact on NTU
+Light		        ←	Chlorophyll   	Regression		        Indiv assessment of chlorophyll impact on light
+Turbidity	    	←	Temp	        	Multiple Regression		Observe impact of environmental variables on turbidity
+```
+
+## 1 Is there an association between light availability and eelgrass bed stability? (ANOVA)
+```{r Create question dataset}
+q1data1 <- filter(data_join, !is.na(PPFD) & Date != "2/20/2022") #I messed up on par readings for this date, going to remove them for now.
+```
+### Step 1: Check Assumptions
+#### 1. Outliers
+```{r Outliers-boxplot}
+library(ggsignif)
+### Plot [designed for 768x576]
+ggplot(q1data1, aes(x = Bed_Stability, y = PPFD))+ 
+ geom_boxplot()+
+ geom_signif(comparisons = list(c("Stable","Transitional")),map_signif_level = c("***"=0.001, "**"=0.01, "*"=0.05))+
+ labs(y = "PPFD", x = "Bed stability", caption = "geom_signif() does not seem to be working properly, the significance should be higher even with the baseline ANOVA") +
+  theme(axis.title.x = element_text(size = 30), axis.text.x = element_text(size = 20), axis.title.y = element_text(size = 30), axis.text.y = element_text(size = 20))
+ 
+# for some reason the geom_signif doesn't seem to work, even without the blocking effect the p-value should be 0.000408 and get at least ***.
+
+```
+
+#### 2. Normality
+
+```{r Normality shapiro.test}
+shapiro.test(q1data1$PPFD)
+# p-value > 0.05  ☑
+## p-value = 0.08908, going to ignore that for now, it should improve as we get more data provided nothing goes wrong
+```
+
+```{r Normality Graph}
+qqnorm(q1data1$PPFD)
+qqline(q1data1$PPFD)
+# looks normal to me  ☑
+```
+
+#### 3. homogeneity of variance
+```{r HOV plot}
+q1mod1 <- aov(PPFD ~ Bed_Stability, data = q1data1)
+plot(q1mod1, 1)
+```
+ 
+```{r HOV tests—functions}
+
+bartlett.test(PPFD~Bed_Stability, data=q1data1)
+q1data1 %>% rstatix::levene_test(PPFD ~ Bed_Stability)
+
+# p-value > 0.05  ☑
+```
+### Step 2: Build model
+#### 1 attempt mixed effects model
+```{r Create data set with ID}
+q1data2 <- q1data1 %>% mutate(ID = 1:nrow(q1data1))
+```
+```{r model - 1 within factor}
+q1mod2 <- aov(PPFD~Bed_Stability + Error(ID/Bed_Stability), data = q1data2)
+summary(q1mod2)
+summary(q1mod1) # inclusion of the within factor seems to reduce the models significance
+
+```
+```{r model - 1 within 1 between factor}
+q1mod3 <- aov(PPFD ~ Bed_Stability + Error(ID/Bed_Stability) + Date, data = q1data2)
+summary(q1mod3) # inclusion of within and between variables seems to reduce F-value while increasing P-values, reducing model power and significance.
+```
+```{r}
+# Going to do this anyway even though added factors did not improve model.
+with(q1data2, interaction.plot(Date, Bed_Stability, PPFD,
+                             #ylim = c(5, 20), lty= c(1, 12), lwd = 3,
+                             ylab = "PPFD", xlab = "time", trace.label = "Bed stability"))
+```
+#### 2 Attempt randomized block design
+Sources online conflict on proper ordering of elements in aov().
+https://stat.ethz.ch/~meier/teaching/anova/block-designs.html puts block factor before treatment while https://www.statmethods.net/stats/anova.html puts it after
+I'm inclined to believe the latter as the former has shows outputs structured in a way not in line with the way R does currently. Testing also revealed that the former method leads aov() to ignore the treatment when reporting with summary(), while the latter method reports data for both variables.
+
+```{r build model - Randomized Block}
+q1mod.bl1 <- aov(PPFD ~ Bed_Stability + Site, data = q1data1)
+summary(q1mod.bl1)
+q1mod.bl2 <- aov(PPFD ~ Site + Bed_Stability, data = q1data1)
+summary(q1mod.bl2)
+```
+Looking at the summery of the first model, we can do a quick check to verify whether blocking was efficient or not. We would like the block factor to explain a lot of variation, hence if the mean square of the block factor is larger than the error mean square. we conclude that blocking was efficient (compared to a completely randomized design). Here, this is the case as 
+82671 > 44241
+.
+### Step 3: Conduct the statistical test
+```{r Table building [papeR]}
+q1table <- anova(lm(PPFD~Bed_Stability + Site,data=q1data1))
+q1table
+q1table_pretty<-prettify(q1table) # having a bit of difficulty trying to figure out how to get the residual statistics on this thing.
+q1table_pretty
+
+```
+
+### Step 4: Output assessment 
+```{r degrees of freedom}
+nrow(q1data1) # n number of observations
+length(unique(q1data1$Bed_Stability)) # k number of groups
+
+# Expected df for Bed_Stability is k - 1
+length(unique(q1data1$Bed_Stability)) - 1
+
+# expected df for residuals is n - k
+40-2
+```
+
+### Step 5: Post-Hoc Test
+```{r Tukey Honest Significant Difference Test}
+TukeyHSD(q1mod.bl1)
+```
+
+### Step 6: Plot and annotate to show significance
+```{r create q1 summary data-frame}
+#Use summarize to make a table of the mean and standard error at each Bed_Stability. 
+
+q1_summary <- q1data1 %>% group_by(Bed_Stability) %>% 
+  dplyr::summarise(mean = mean(PPFD), se = sd(PPFD)/sqrt(length(PPFD)))
+q1_summary
+```
+
+```{r visualization of means}
+ggplot(q1_summary, aes(x = Bed_Stability, y = mean)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = (mean - se), ymax = (mean + se)), width = 0.2) +
+  labs(y = "PPFD", x = "Bed stability") +
+  theme(axis.title.x = element_text(size = 30), axis.text.x = element_text(size = 20), axis.title.y = element_text(size = 30), axis.text.y = element_text(size = 20))
+
+```
+```{r}
+q1data2 <- mutate(q1data1, Stable = case_when(Bed_Stability == "Stable"~ 1, Bed_Stability == "Transitional"~0))
+       
+glimpse(q1data2)
+library(lme4)
+
+```
+```{r}
+mlr_PPFD_Stability <- ggplot(q1data2) + aes(x = PPFD, y = Stable) + geom_point()+ stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial),
+              col="red", lty=2)
+mlr_PPFD_Stability
+
+#probability (%) of finding a stable bed at x PPFD. Transition point. Does not control for repeated measures, the sites are measured multiple times, weather etc. but there is a significant difference.
+```
+
+## 2 Are tempurature and chlorophyll significantly different between stable and ephemeral sites? (logistic REGRESSION)
+## 2b what environmental variables are significantly different betwee stable & transitional sites (mulitple logistic Regression)
+In this case bed stability is the binary variable
+Multiple logistic regression guide: https://rcompanion.org/rcompanion/e_07.html
+see also http://www.med.mcgill.ca/epidemiology/joseph/courses/EPIB-621/logistic2.pdf for multivariate logistic regression.
+### Step 1: tidy your data
+```{r}
+q2data1 <- select(data_join, -c(Date, Sample_ID, CurrentDirection, Depth_PAR, VegDepth_ft, F_Value, ug.L, Dilution, CalculatedConcentration_ug.L, highlow, Flow))
+```
+
+
+### Step 2: Visualize the data
+I believe this is what is known as a correlation chart???
+```{r}
+# for this kind of data visualization everything needs to be in numeric form
+## Bed_Stability can be turned into a binary value, but Site has to go
+data.num <- select(q2data1, -c(Site, DateTime,`DO_%`, date, time))
+data.num$Bed_Stability <- as.numeric(data.num$Bed_Stability)
+data.num$ForelUleColorCategory <- as.numeric(data.num$ForelUleColorCategory)
+# for the sake of legibility, we will be changing names for this data frame
+data.num<-rename(data.num,
+                 "Stability" = "Bed_Stability",
+                 "Turbidity" = "Turbidity_NTU",
+                 "Temp" = "Temp_C",
+                 "DO" = "DO_mg.L",
+                 "Depth" = "BottomDepth_ft",
+                 "Color" = "ForelUleColorCategory",
+                 "CHLA" = "CorrectedConcentration_ug.L",
+                 "Tide" = "PredictedTide",
+                 "ΔTide" = "TideChange")
+chart.Correlation(data.num,
+                  method="spearman",
+                  histogram=TRUE,
+                 # cex.labels =50,
+                  pch=16) # ordinarily this parameter indicates what type of symbol to use for point data, It seems to be broken here however.
+```
+
+```{r label fix 1: brute force}
+#found here https://stackoverflow.com/questions/64934425/how-to-increase-the-size-of-the-name-of-variables-in-performanceanalyticschart
+mychart.Correlation <- function (R, method = c("pearson", "kendall", "spearman"), ...){
+ 
+ x = PerformanceAnalytics::checkData(R, method = "matrix")
+ if (missing(method)) method = method[1]
+ cormeth <- method
+ panel.cor <- function(x, y, digits = 2, prefix = "", 
+                       use = "pairwise.complete.obs", 
+                       method = cormeth, 
+                       cex.cor, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- cor(x, y, use = use, method = method)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste(prefix, txt, sep = "")
+  if (missing(cex.cor)) cex <- 0.8/strwidth(txt)
+  test <- cor.test(as.numeric(x), as.numeric(y), method = method)
+  Signif <- symnum(test$p.value, corr = FALSE, na = FALSE, 
+                   cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                   symbols = c("***", "**", "*", ".", " "))
+  text(0.5, 0.5, txt, cex = cex * (abs(r) + 0.3)/1.3)
+  text(0.8, 0.8, Signif, cex = cex, col = 2)
+ }
+ 
+ pairs(x, gap = 0, lower.panel = panel.smooth, upper.panel = panel.cor, ...)
+ 
+}
+# this option removes histograms, but will allow larger labels along the diagnal. That being said this isn't the worst thing in the world as the histograms did not seem to use logical bin sizes.
+names(data.num) <- gsub(" ", "\n", names(data.num))
+mychart.Correlation(data.num,
+                  method="spearman",
+                  cex.labels = 1.5)
+```
+
+```{r correlation test}
+corr.test(data.num,
+          use = "pairwise",
+          method="spearman",
+          adjust="none",      # Can adjust p-values; see ?p.adjust for options
+          alpha=.05)
+```
+
+### Step 3: Run the logistic regression model
+```{r}
+# for some reason presence of turbidity greatly reduces model significance, but it's absence creates a number of errors stating 
+## Warning in cor.test.default(as.numeric(x), as.numeric(y), method = method) : Cannot compute exact p-value with ties
+##Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred Warning: glm.fit: algorithm did not converge
+
+### Create new data frame with all missing values removed (NA’s)
+data.omit = na.omit(q2data1)
+
+
+### Define full and null models and do step procedure
+
+model.null = glm(Bed_Stability ~ 1,
+                 data=data.omit,
+                 family = binomial(link="logit")
+                 )
+
+model.full = glm(Bed_Stability ~ Turbidity_NTU + Temp_C + DO_mg.L + PPFD + BottomDepth_ft + ForelUleColorCategory + CorrectedConcentration_ug.L + PredictedTide + TideChange,
+                 data=data.omit,
+                 family = binomial(link="logit")
+                 )
+    
+step(model.null,
+     scope = list(upper=model.full),
+             direction="both",
+             test="Chisq",
+             data=Data)
+```
+looks like the winning model is:
+glm(formula = Bed_Stability ~ PPFD + DO_mg.L + CorrectedConcentration_ug.L, 
+    family = binomial(link = "logit"), data = data.omit)
+
+```{r Final Model & graph}
+q2mod<-glm(formula = Bed_Stability ~ PPFD + DO_mg.L + CorrectedConcentration_ug.L, data = q2data1, 
+    family = binomial(link = "logit"), na.action(na.omit))
+
+summary(q2mod)
+### Plot [designed for 786x576]
+par(cex.lab = 1.5, cex.axis = 1.3)
+plot(sort(fitted(q2mod)), type = "l", lwd = 2, ylab = "Model Probability", xlab = "Sorted Sample Number")
+abline(h = mean(fitted(q2mod)), lty = 2)
+abline(v = length(q2mod$fit)/2, lty = 2)
+# Neat
+```
+```{r create pretty table}
+
+q2table_pretty<-prettify(summary(q2mod))
+q2table_pretty
+```
+
+### Step 4: Post hoc tests???
+Going to be honest from this point on I'm just winging it based on the online tutorial
+```{r ANOVA for individual terms}
+library(car)
+Anova(q2mod, type="II", test="Wald")
+```
+
+```{r Pseudo R-squared}
+library(rcompanion)
+nagelkerke(q2mod)
+```
+
+```{r overall p-value}
+### Create data frame with variables in final model and NA’s omitted
+q2data.final <- 
+  na.omit(select(q2data1,
+         Bed_Stability,
+         PPFD,
+         DO_mg.L,
+         CorrectedConcentration_ug.L
+         ))
+### Define null models and compare to final model
+
+model.null = glm(Bed_Stability ~ 1,
+                  data=q2data.final,
+                  family = binomial(link="logit")
+                  )
+
+anova(q2mod,
+      model.null,
+      test="Chisq")
+```
+```{r p-value continued}
+library(lmtest)
+lrtest(q2mod)
+```
+### Step 5: Final graphs
+```{r plot of standardized residuals}
+# We will label this object 'model' so that the graph will have appropriate axis labels
+model<-glm(formula = Bed_Stability ~ PPFD + DO_mg.L + CorrectedConcentration_ug.L, data = q2data1, 
+    family = binomial(link = "logit"), na.action(na.omit))
+### Plot [designed for 786x576]
+par(cex.lab = 1.5, cex.axis = 1.2)
+plot(fitted(model),
+     rstandard(model))
+```
+```{r Simple plot of predicted values}
+### Create data frame with variables in final model and NA’s omitted
+##this time around we need to have all numeric again.
+q2data.final <- 
+  na.omit(select(q2data1,
+         Bed_Stability,
+         PPFD,
+         DO_mg.L,
+         CorrectedConcentration_ug.L
+         ))
+
+q2data.final$Bed_Stability <- as.numeric(q2data.final$Bed_Stability)
+
+q2data.final$predy = predict(q2mod,
+                             type="response")
+
+### Plot [designed for 768x576]
+par(cex.lab = 1.5, cex.axis = 1.2)
+plot(Bed_Stability ~ predy,
+     data = q2data.final,
+     pch = 16,
+     xlab = "Predicted probability of 1 response",
+     ylab = "Actual response")
+```
+### Step 6: Check for overdispersion
+If the ratio of the residual deviance to the residual degrees of freedom exceeds 1.5, then the model is overdispersed.
+```{r Overdispersion}
+summary(q2mod)$deviance / summary(q2mod)$df.residual
+```
+
+
+### 2c How is Photosyntheic Photon Flux Density predicted by other measurements (Multiple Regression)
+
+## 3 How do chlorophyll levels impact light availability in the lower bay? (REGRESSION)
+
+### Step 1: Tidy the data, remove NA values from relevant collumns
+```{r}
+q3data1 <- data_join %>%
+  filter(!is.na(PPFD) & !is.na(CorrectedConcentration_ug.L)) %>% 
+  select(c("PPFD", "CorrectedConcentration_ug.L"))
+#for the sake of readability
+q3data1 <- rename(q3data1, "Chlorophyll" = "CorrectedConcentration_ug.L")
+#going to make a version without outliers for the sake of having a normalized data set
+q3data2<- filter(q3data1, abs(median(Chlorophyll)-Chlorophyll)
+      <= 1.5*IQR(Chlorophyll))
+```
+### Step 2: visualize the data
+```{r}
+ggplot(q3data1) + 
+  aes(Chlorophyll,PPFD) +
+  geom_point()
+ggplot(q3data2) + 
+  aes(Chlorophyll,PPFD) +
+  geom_point()
+#relationship appears roughly linear but it is difficult to say. something seems off about outliers as well.
+```
+### Step 3: Check assumptions
+```{r normality test}
+shapiro.test(q3data1$Chlorophyll)
+shapiro.test(q3data1$PPFD)
+# here's to hoping more data-points can fix the lack of normality, for now we will check without outliers
+```
+```{r Normality test 2}
+shapiro.test(q3data2$Chlorophyll)
+shapiro.test(q3data2$PPFD)
+# p-value > 0.05  ☑
+```
+```{r homoscedasticity test}
+chlo.lm1 <- lm(PPFD ~ Chlorophyll, data = q3data1)
+par(mfrow = c(2, 2))
+plot(chlo.lm1)
+#fails to pass this test, lets try removing outliers.
+```
+```{r Homoscedastity test 2}
+chlo.lm2 <- lm(PPFD ~ Chlorophyll, data = q3data2)
+par(mfrow = c(2, 2))
+plot(chlo.lm2)
+# Much better.  ☑
+```
+
+### Step 4: Testing - Correlation
+because we now have both a normal and non-normal dataset, we will do both Spearman's rank test and Pearsons product moment.
+```{r Corr test}
+ChloCorSpear <- cor.test(q3data1$PPFD, q3data1$Chlorophyll, data = q3data, method = "spearman")
+ChloCorPears <- cor.test(q3data2$PPFD, q3data2$Chlorophyll, data = q3data2, method = "pearson")
+# for some reason cor.test() does not recognize q3data as numeric. Entering in data$column format seems to work for some reason however...
+```
+```{r [ρ]}
+ChloCorSpear$estimate
+rho_spear <- round(ChloCorSpear$estimate, 3)
+ChloCorPears$estimate
+rho_pears <- round(ChloCorPears$estimate, 3)
+
+```
+```{r P-value}
+ChloCorSpear$p.value
+round(ChloCorSpear$p.value, 3)
+#p val = 0.144, that's a shame. we will see how this pans out with more samples.
+ChloCorPears$p.value
+round(ChloCorPears$p.value, 3)
+#according to our data [as of 2/25/2022], PPFD is negatively correlated with chlorophyll-a density (rho(ρ)=-0.462, p-val=0.015)
+```
+### step 5: Regression analysis
+```{r}
+summary(chlo.lm1)
+summary(chlo.lm2)
+```
+```{r}
+q3table_pretty<-prettify(summary(chlo.lm2))
+q3table_pretty
+```
+
+#### Save model outputs for later graphing
+```{r slope}
+chlo.slope1 <- coef(chlo.lm1)[2]
+chlo.slope2 <- coef(chlo.lm2)[2]
+```
+```{r intercept}
+chlo.int1 <- coef(chlo.lm1)[1]
+chlo.int2 <- coef(chlo.lm2)[1]
+```
+```{r R-squared}
+chlo.Rsq1 <- summary(chlo.lm1)$r.squared
+chlo.Rsq2 <- summary(chlo.lm2)$r.squared
+```
+### step 6: Graphs
+```{r}
+chloplot1 <- ggplot(q3data1) +
+  aes(Chlorophyll, PPFD) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed")
+chloplot2<- ggplot(q3data2) +
+  aes(Chlorophyll, PPFD) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed")
+```
+```{r check model outputs and create final graph}
+chlo.int1
+chlo.slope1
+chlo.Rsq1
+chlo.int2
+chlo.slope2
+chlo.Rsq2
+
+chloplot1 + geom_text(x=10, y=400, label = "R-squared = 0.023, y = 17.35x + 371") +
+  theme(axis.title.x = element_text(size = 30), axis.text.x = element_text(size = 20), axis.title.y = element_text(size = 30), axis.text.y = element_text(size = 20))
+#this graph is worthless for now, but I will put in the label regardless
+chloplot2 + geom_text(size=5, x=1.5, y=575, label = "R-squared = 0.213, y = -195x + 664.54") +
+  theme(axis.title.x = element_text(size = 30), axis.text.x = element_text(size = 20), axis.title.y = element_text(size = 30), axis.text.y = element_text(size = 20))
+```
+Simple linear regression analysis was used to test if chlorophyll-a concentration, and thus phytoplankton density,  predicted Photosynthetic Photon Flux Density at the depth of seagrass beds. The results of this regression indicated the two predictors explained 21.3% of the variance (R-squared = 0.2128905, F(1,6) = 14.87, p < 0.05). 
+
+## 4 How do differences between daily high and low tides impact [environmental variables]? (ordination)(nMDS???) (hard)
+```{r}
+
+
+```
+
+## 5 Are more extreme high and low tides associated with lower quantities of light scattering materials in the water column? (Multiple REGRESSION) 
+This will involve comparison of differences between 
+```{r}
+#going to need to create yet another collumn for the tides data-set for this one. Then I need to figure out how to make sure any significance isn't just due to relatedness with other tide measurements
+```
+
+## 6	Are lower average daily tidal ranges associated with higher levels of light scattering materials in the water column?
+```{r}
+```
+
+# NMDS (or maybe PCA???[MFA?????????])
+## Data Prep
+```{r}
+nMDS.data <- unite(data_join, col = "ID", Site, Date, sep = "_") %>% 
+  select("ID", "DateTime", "Turbidity_NTU", "Temp_C", "DO_mg.L", "PPFD", "BottomDepth_ft", "BottomDepth_ft", "ForelUleColorCategory", "CorrectedConcentration_ug.L", "PredictedTide", "TideChange")
+```
+
+# Graphs
+## Tide Graph
+```{r}
+TideGraph<-ggplot(tide_final, aes(y=PredictedTide, x = time))+
+  geom_smooth()+
+  facet_wrap(. ~ date, ncol = 3)
+TideGraph
+
+ggplot(tide_final, aes(y=PredictedTide, x = DateTime))+
+  geom_smooth()+
+  facet_wrap(. ~ date,scales = "free_x", ncol = 3)
+```
+Current color scale designed for color-blind accessability, it will also not cover more than 8 dates
+
+## Daily data graphs
+```{r plot temp}
+TE<-ggplot(data_join, aes(y=Temp_C, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Turbidity (NTU)")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+   coord_cartesian(ylim=(c(13,17)))+
+  scale_y_continuous(breaks=seq(13, 17, 0.5))+
+  theme(text = element_text(size = 20))
+TE
+```
+
+```{r plot DO}
+DO<-ggplot(data_join, aes(y=DO_mg.L, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Dissolved oxygen ", frac("mg O"[2], "L H"[2]*"O"))), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(7,10)))+
+  scale_y_continuous(breaks=seq(7, 10, 0.5))+
+  theme(text = element_text(size = 20))
+DO
+```
+
+```{r plot PPFD}
+PPFD<-ggplot(data_join, aes(y=PPFD, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("PPFD")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(50,1100)))+
+  scale_y_continuous(breaks=seq(0,1100, 250))+
+  theme(text = element_text(size = 20))
+PPFD
+```
+
+```{r plot FU color-category}
+FU<-ggplot(data_join, aes(y=ForelUleColorCategory, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Forel-Ule color category")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+   theme(legend.position="bottom",axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30), legend.title=element_blank(), legend.text = element_text(size = 40))+
+  theme(text = element_text(size = 20))+
+  coord_cartesian(ylim=(c(1,5)))+
+  scale_y_continuous(breaks=seq(1, 5, 1))+
+  theme(text = element_text(size = 20))
+FU
+```
+
+```{r Plot chlorophyll-a}
+CHLO<-ggplot(data_join, aes(y=CorrectedConcentration_ug.L, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Chlo-a Concentration ", frac("µg", "L"))), x = "Bed Stability", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(0.6,13)))+
+  scale_y_continuous(breaks=seq(0,13,2.5))+
+  theme(text = element_text(size = 20))
+CHLO
+```
+```{r plot turbidity}
+NTU<-ggplot(data_join, aes(y=Turbidity_NTU, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Turbidity (NTU)")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+   coord_cartesian(ylim=(c(.675,15)))+
+  scale_y_continuous(breaks=seq(0, 15, 2))+
+  theme(text = element_text(size = 20))
+NTU
+```
+
+
+## Averages Graphs
+```{r plot mean_temp}
+MTE<-ggplot(SummaryData, aes(y=mean_temp, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_temp - se_temp), ymax = (mean_temp + se_temp)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Tempurature (°C)")), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  #theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+   coord_cartesian(ylim=(c(13.17,17)))+
+  scale_y_continuous(breaks=seq(13, 17, 1))+
+  theme(text = element_text(size = 20))
+MTE
+```
+
+```{r plot mean_DO}
+MDO<-ggplot(SummaryData, aes(y=mean_DO, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_DO - se_DO), ymax = (mean_DO + se_DO)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Dissolved oxygen ", frac("mg O"[2], "L H"[2]*"O"))), x = "Bed stability", fill = "Date")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  #theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(7.14,10)))+
+  scale_y_continuous(breaks=seq(7, 10, 0.5))+
+  theme(text = element_text(size = 20))
+MDO
+```
+
+```{r plot mean_PPFD}
+MPPFD<-ggplot(SummaryData, aes(y=mean_PPFD, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_PPFD - se_PPFD), ymax = (mean_PPFD + se_PPFD)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("PPFD")), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(45,1000)))+
+  scale_y_continuous(breaks=seq(0,1000, 250))+
+  theme(text = element_text(size = 20))
+MPPFD
+```
+
+```{r plot median FU color-category}
+#I'm unsure how to do error bars for a discrete dataset, going to use SE for now
+MFU<-ggplot(SummaryData, aes(y=median_color, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+
+  geom_errorbar(aes(ymin = (median_color - se_color), ymax = (median_color + se_color)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Forel-Ule color category")), x = "Bed Stability", fill = "Date", caption = "*points center on median color category")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  #theme_classic()+
+  theme(legend.position = "bottom",axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30), legend.title=element_blank(), legend.text = element_text(size = 40))+
+  coord_cartesian(ylim=(c(1.225,6)))+
+  scale_y_continuous(breaks=seq(1, 6, 1))+
+  theme(text = element_text(size = 20))
+MFU
+```
+
+```{r plot mean_CorConc}
+MCHLO<-ggplot(SummaryData, aes(y=mean_CorConc, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_CorConc - se_CorConc), ymax = (mean_CorConc + se_CorConc)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Chlo-a Concentration ", frac("µg", "L"))), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(0.45,10)))+
+  scale_y_continuous(breaks=seq(0,10, 2.5))+
+  theme(text = element_text(size = 20))
+MCHLO
+```
+```{r NTU}
+MNTU<-ggplot(SummaryData, aes(y=mean_NTU, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 5, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_NTU - se_NTU), ymax = (mean_NTU + se_NTU)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Turbidity (NTU)")), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c("#000000", "#E69F00", "#56B4E9", "#009E73", 
+                       "#F0E442", "#0072B2", "#D55E00", "#CC79A7"))+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(0.5,11.25)))+
+  scale_y_continuous(breaks=seq(0,11.25, 2.5))+
+  theme(text = element_text(size = 20))
+MNTU
+```
+
+
+## multiplot function
+This is the definition of multiplot. It can take any number of plot objects as arguments, or if it can take a list of plot objects passed to plotlist.
+```{r Multiple Plot Funciton: multiplot}
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r NBWQ_DailySiteData}
+#this plot was designed for WQHD (2560x1440p) resolution
+#Also note that the graph was orignially made by pasting the legend with MS paint into a version without the legend to allow consistent graph sizes
+multiplot(TE,DO,PPFD,FU,CHLO,NTU, cols = 3)
+```
+
+```{r NBWQ_BedTypeAverages}
+#this plot was designed for WQHD (2560x1440p) resolution
+#Also note that the graph was orignially made by pasting the legend with MS paint into a version without the legend to allow consistent graph sizes
+multiplot(MTE,MDO,MPPFD,MFU,MCHLO,MNTU, cols = 3)
+```

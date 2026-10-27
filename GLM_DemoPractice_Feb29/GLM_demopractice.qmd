@@ -1,0 +1,285 @@
+---
+title: "GLM Demo"
+author: "Amy King-Henry"
+date_created: February 27, 2024
+date_last_modified: February 29, 2024
+format: html
+editor: visual
+---
+
+# GLM
+
+## Steps to conducting a GLM analysis
+
+1.  Choose your variable and compose your systematic component (your formula)
+2.  Decide if you have random effects to include and add them to your formula
+3.  Choose your random component (normal/gaussian or something else)
+    1.  Consider the variable type!
+    2.  Plot histograms of your response variable
+    3.  Make a simple lm() model and examine the residuals plots for a simple and assumptions test plots to assess shape of distribution; plot a histogram of the residuals of the model
+
+<!-- -->
+
+3.  Choose which function to use in R
+
+-   `lm` for normal (aka gaussian), fixed effects only
+-   `glm` for non-normal (anything but gaussian), fixed effects only
+-   `lmer` for normal (aka gaussian) with random effects
+-   `glmer` for non-normal (anything but gaussian) with random effects
+
+8.  Add your random component and link function (if appropriate) to your model
+
+9.  Run your model.
+
+10. If you got this warning message about a singular fit, that means that you don't have enough replicates to support your random effects structure. Try simplifying your random effects and run your model again.
+
+    ```         
+    boundary (singular) fit: see help('isSingular')
+    ```
+
+11. If you try different random effects structures, or try different combinations of predictor variables (with interaction, without interactions, etc.) save each one use `AIC()` to compare the fit of model to other possible models. The model with the lowest score is the best fit model. If your best models differ by less than 2 AIC units, choose the simpler model.
+
+`AIC(sc_model_full, sc_model_main, sc_model_WF, sc_model_F)`
+
+![](images/clipboard-1006034170.png){width="200"}
+
+12. Run your best fit model and examine the model results in `summary(model).` There should be a table each for Random Effects and Fixed Effects.
+
+First look at the **Random effects** table. Ideally, the Block (or other random effect) Variance should be pretty small, close to zero, and the Residual Variance a little higher. The Block Variance summarizes how different the Blocks are from each other, while the Residual Variance tells you how much variance there is between treatments. If the random effect variance is high, double check that you specified your random effects structure correctly (e.g., does something need to be nested? are you missing individual effects?)
+
+![](images/clipboard-1314947650.png){width="400"}
+
+Next look at the **Fixed effects** table. The lmerTest package adds the P-value column on for us, but we don't generally report p-values for generalized linear models, it's more for us to easily see which have larger differences. Notice that instead of just "Water_Tmt", it includes a treatment. The estimate is the estimated difference in means between the Reduced treatments and the (alphabetically first) Ambient water treatment, after removing the variance due to Block. If the Std. Error is greater than the absolute value of the estimate, your effect will not be significant. This is easy to visualize with a forest plot
+
+![](images/clipboard-3993177753.png){width="600"}
+
+If our errorbars are large and cross the zero line, then we cannot be confident that the difference in means is different from zero (i.e., that our Estimate is 0).
+
+![](images/clipboard-1568863468.png){width="500"}
+
+13. If you had significant interactions, check the **estimated marginal means** to make sure you get your pairwise comparisons correct.
+
+    `emmeans(flower_model, pairwise ~ Water | Nitrogen)`
+
+14. Make your final visuals and interpret in the context of your experiment!
+
+## REFERENCE
+
+RANDOM COMPONENTS:
+
+![](images/clipboard-629016983.png){width="500"}
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(glmmTMB) # this one has the beta random dist
+library(sjPlot)
+library(emmeans)
+
+install.packages("emmeans")
+```
+
+```{r}
+load("Loma_Shrub_data.Rdata")
+load("Loma_Mustard_data.Rdata")
+load("SeedsPerPlant.Rdata")
+```
+
+## Practice
+
+### Normal/Gaussian
+
+Quantitative measurements that aren't whole numbers - often can be normal! Example? Shrub height.
+
+```{r}
+Shrub_data
+
+# How not to look for normality
+hist(Shrub_data$Shrub_Height_cm)
+
+# Remember there are two species! 
+ggplot(Shrub_data, aes(x = Shrub_Height_cm)) + geom_histogram() + facet_wrap(Species~.)
+```
+
+Preliminary model to help elucidate the distribution shape - You know what it looks like if it's normal!
+
+```{r}
+model <- lm(
+  Shrub_Height_cm ~ Water_Treatment * N_Treatment * Species, 
+  data = Shrub_data)
+
+plot(model)
+```
+
+gauss_glm_link_rand \<- glmer(Shrub_Height_cm \~ Water_Treatment \* N_Treatment + Species + (1\|Block),
+
+family = gaussian(link = "identity"),
+
+data = Shrub_data)
+
+gauss_glm_link_rand_intSp \<- glmer(Shrub_Height_cm \~ Water_Treatment \* N_Treatment \* Species + (1\|Block),
+
+family = gaussian(link = "identity"),
+
+data = Shrub_data)
+
+```{r}
+gauss_glm <- glm(Shrub_Height_cm ~ Water_Treatment * N_Treatment + Species, 
+                 family = "gaussian",
+                 data = Shrub_data)
+  
+gauss_glm_link <- glm(Shrub_Height_cm ~ Water_Treatment * N_Treatment + Species, 
+                 family = gaussian(link = "identity"),
+                 data = Shrub_data)
+
+gauss_glm_link_rand <- glmer(Shrub_Height_cm ~ Water_Treatment * N_Treatment + Species + (1|Block), 
+                 family = gaussian(link = "identity"),
+                 data = Shrub_data)
+
+gauss_glm_link_rand_intSp <- glmer(Shrub_Height_cm ~ Water_Treatment * N_Treatment * Species + (1|Block), 
+                 family = gaussian(link = "identity"),
+                 data = Shrub_data)
+
+gauss_glm_link_rand_noInt <- glmer(Shrub_Height_cm ~ Water_Treatment + N_Treatment  + Species + (1|Block), 
+                 family = gaussian(link = "identity"),
+                 data = Shrub_data)
+
+
+```
+
+#### Test the competing models to find the "best" using AIC
+
+```{r}
+AIC(gauss_glm, 
+    gauss_glm_link, 
+    gauss_glm_link_rand, 
+    gauss_glm_link_rand_intSp, 
+    gauss_glm_link_rand_noInt) |> knitr::kable()
+
+```
+
+Best fit model:
+
+```{r}
+gauss_glm_link_rand_intSp <- 
+  glmer(Shrub_Height_cm ~ Water_Treatment * N_Treatment * Species + (1|Block), 
+                 family = gaussian(link = "identity"),
+                 data = Shrub_data)
+```
+
+#### Visualize and Interpret your results
+
+```{r}
+summary(gauss_glm_link_rand_intSp)
+```
+
+```{r}
+plot_model(gauss_glm_link_rand_intSp)
+```
+
+```{r}
+ggplot(Shrub_data) + 
+  aes(x = Water_Treatment, y = Shrub_Height_cm, fill = N_Treatment) + 
+  geom_boxplot() + 
+  facet_grid(.~Species )
+```
+
+What do these results mean?
+
+-   Main effect of drought - droughted plants across both species and treatments were on average, taller
+
+-   Main effect of species - SALMEL are shorter than MALLAU
+
+-   No effect of Nitrogen, and no significant interactions.
+
+#### Estimated marginal means for pairwise comparisons
+
+If you see a significant comparison, especially one with an interaction, and you want the equivalent of a post-hoc pairwise comparison of means, one thing you can do is check the estimated marginal means.
+
+```{r}
+emmeans(gauss_glm_link_rand_intSp, "Water_Treatment")
+```
+
+```{r}
+EMpair_WN <- emmeans(gauss_glm_link_rand_intSp, pairwise ~ Water_Treatment | N_Treatment)
+# look at the contrasts at the bottom of the output for the pairwise comparisons
+
+EMpair_WN$contrasts
+```
+
+Important: the order matters!
+
+```{r}
+EMpair_NW <- emmeans(gauss_glm_link_rand_intSp, pairwise ~ N_Treatment | Water_Treatment)
+# look at the contrasts at the bottom of the output for the pairwise comparisons
+
+EMpair_NW$contrasts
+```
+
+### Logistic/Binomial
+
+Note: your response variable MUST be formatted as 0/1 in order for this to run correctly.
+
+```{r}
+logist_model <- glm(Y ~ X, data = data, family = "binomial")
+```
+
+### Poisson Distribution
+
+```{r}
+poisson_model <- glm(Y ~ X, data = data, family = "poisson")
+
+poisson_model <- glm(Y ~ X, data = data, family = poisson(link = "log"))
+```
+
+### Beta Distribution
+
+```{r}
+beta_model <- glm(Y ~ X, data = data, family = beta_family())
+```
+
+# BONEYARD
+
+### Log-normal
+
+```{r}
+SeedsPerPlant
+
+SeedsPerPlant |> ggplot(aes(x = Water_Tmt, y = SeedsPerPlant, fill = N_Tmt)) + geom_boxplot()
+
+SeedsPerPlant |> ggplot(aes(x = SeedsPerPlant)) + geom_histogram()
+
+model <- lm(SeedsPerPlant ~ Water_Tmt * N_Tmt, data = SeedsPerPlant)
+plot(model)
+
+# violates assumption of heterogeneity of variance! Big range of seed counts. 
+```
+
+```{r}
+log_model <- glmer(
+  log(SeedsPerPlant + 1) ~ Water_Tmt * N_Tmt + (1|Block), 
+  data = SeedsPerPlant, 
+  family = "gaussian")
+
+summary(log_model)
+```
+
+#### Visualize and Interpret
+
+```{r}
+summary(log_model)
+```
+
+```{r}
+# this function from the sjPlot package makes a forest plot so its easier to examine effect sizes. 
+plot_model(log_model)
+```
+
+```{r}
+SeedsPerPlant |> 
+  ggplot() + 
+  aes(y = log(SeedsPerPlant + 1), x = Water_Tmt, fill = N_Tmt) +
+  geom_boxplot() + 
+  geom_jitter(position = position_jitterdodge(), alpha = 0.5)
+```

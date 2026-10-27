@@ -1,0 +1,666 @@
+---
+title: "NBWQ Analysis"
+author: "Matthew Walsh, Dana Briggs"
+date: "1/10/2022"
+date edited: "1/21/2022"
+---
+
+# Setup
+```{r install/load packages}
+list.of.packages <-
+  c("tidyverse", "ggplot2", "dplyr", "vegan", "rstatix")
+new.packages <-
+  list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(vegan)
+```
+
+```{r data download and minor fixes}
+data1<-read.csv("NBWQ_Combined_RAW_Data20220224.csv")
+data1[data1 ==""]<- NA
+data1
+
+tide1<-read.csv("NOAA-MLLW_Tides_minute_2021-22.csv")
+
+chlA<- read.csv("ZP_ChlorophyllData_TIDY_02-02-2022.csv")
+
+data1
+tide1
+chlA
+```
+
+```{r join date & time}
+#For sake of simplicity, we will substitute the HOBOtime into the Blank spaces of SampleTime_Water
+data1<-data1 %>% 
+  mutate(SampleTime_Water = ifelse(is.na(data1$SampleTime_Water), data1$HOBOtime, data1$SampleTime_Water)) %>% 
+  unite(col = "DateTime", Day, SampleTime_Water, sep = " ", remove = "FALSE")
+  
+
+tide1<-tide1 %>% 
+  unite(col = "DateTime", date, time, sep = " ", remove = "FALSE")
+  
+```
+
+```{r Fix DateTime For tides and survey data}
+data2 <- data1 %>%  mutate(DateTime = format(strptime(DateTime, "%m/%d/%Y %H:%M"))) %>% 
+  mutate(DateTime = as.POSIXct(DateTime))
+tide2 <- tide1 %>%  mutate(DateTime = format(strptime(DateTime, "%m/%d/%Y %H:%M"))) %>% 
+  mutate(DateTime = as.POSIXct(DateTime))
+```
+
+```{r tranform date field}
+#date field must be transformed into factor and told what specific order it should have for later graphs
+data2$Date <- factor(data2$Date, levels = c("12/4/2021", "12/15/2021", "1/8/2022", "1/16/2022", "1/23/2022"))
+```
+
+
+```{r create new TideChange column}
+tide2 <- tide2 %>% mutate(TideChange = (pred-lag(pred)))
+#found and removed 4 outliers for TideChange resulting from disjunction in tides across sampling dates
+##  to test for outliers of this type, turn off code below code run unique(tide2$TideChange) and select (number of sample dates)-1 most extreme values
+tide2$TideChange[abs(tide2$TideChange) >= 0.1] <- NA
+```
+
+
+
+```{r fix object classes}
+data2$Site <- as.factor(data2$Site)
+data2$Bed_Stability <- as.factor(data2$Bed_Stability)
+data2$CurrentDirection <- as.factor(data2$CurrentDirection)
+data2$PPFD <- as.numeric(data2$PPFD)
+view(data2)
+```
+
+```{r Make selections for what will be included in joined data frames}
+data2<- data2 %>% select(c("Site", "Bed_Stability", "Date", "DateTime", "Turbidity_NTU","Sample_ID",  "CurrentDirection", "Temp_C", "DO_mg.L", "DO_.", "Depth_PAR", "PPFD", "BottomDepth_ft", "VegDepth_ft",  "ForelUleColorCategory", "HOBOtime_start"))
+
+tide2<- tide2 %>% select(c("DateTime", "pred", "TideChange"))
+
+chlA2<- chlA %>% select(c("Sample_ID", "F.Value", "X.ug.L.", "Dilution.", "CalculatedConcentration.ug.L.", "CorrectedConcentration.ug.L."))
+
+```
+
+```{r Join 1}
+fieldXchlA_join<- data2 %>% left_join(chlA2, by = "Sample_ID")
+fieldXchlA_join$Sample_ID <- as.factor(fieldXchlA_join$Sample_ID)
+```
+
+
+```{r Join 2}
+data_join<- fieldXchlA_join %>% left_join(tide2, by = "DateTime")
+save(data_join, file = "NBWQdata_Tides.Rdata")
+```
+
+#Daywide treatment averages
+```{r}
+SummaryData<-data_join %>%
+  group_by(Date, Bed_Stability) %>% 
+  summarise(mean_temp = mean(Temp_C),
+            se_temp = sd(Temp_C)/sqrt(length(Temp_C)),
+            mean_DO = mean(DO_mg.L),
+            se_DO = sd(DO_mg.L)/sqrt(length(DO_mg.L)),
+            mean_NTU = mean(Turbidity_NTU),
+            se_NTU = sd(Turbidity_NTU)/sqrt(length(Turbidity_NTU)),
+            mean_PPFD = mean(PPFD),
+            se_PPFD = sd(PPFD)/sqrt(length(PPFD)),
+            median_color = median(ForelUleColorCategory),
+            #not sure how to tell medain() to round the values to whole numbers
+            se_color = sd(ForelUleColorCategory)/sqrt(length(ForelUleColorCategory)),
+            mean_CorConc = mean(CorrectedConcentration.ug.L.),
+            se_CorConc = sd(CorrectedConcentration.ug.L.)/sqrt(length(CorrectedConcentration.ug.L.))
+            )
+SummaryData
+
+SummaryBySite<-data_join %>%
+  filter(!is.na(PPFD)) %>% 
+group_by(Site, Bed_Stability) %>% 
+  summarise(mean_temp = mean(Temp_C),
+            se_temp = sd(Temp_C)/sqrt(length(Temp_C)),
+            mean_DO = mean(DO_mg.L),
+            se_DO = sd(DO_mg.L)/sqrt(length(DO_mg.L)),
+            mean_NTU = mean(Turbidity_NTU),
+            se_NTU = sd(Turbidity_NTU)/sqrt(length(Turbidity_NTU)),
+            mean_PPFD = mean(PPFD),
+            se_PPFD = sd(PPFD)/sqrt(length(PPFD)),
+            median_color = median(ForelUleColorCategory),
+            #not sure how to tell medain() to round the values to whole numbers
+            mean_CorConc = mean(CorrectedConcentration.ug.L.),
+            se_CorConc = sd(CorrectedConcentration.ug.L.)/sqrt(length(CorrectedConcentration.ug.L.))
+            )
+SummaryBySite
+```
+# What did we do here?
+```{r saving data frames}
+#save(data_join, file = "NBWQ-FocalProject_PRIMARY_20220204.Rdata")
+# write.csv(data_join, "NBWQ-FocalProject_Primary_20220204.csv", row.names = FALSE)
+```
+
+#Questions
+##Question Summary
+DANA
+1.  Is there an association between light availability and eelgrass bed stability? (ANOVA)
+
+2. Is temperature and chlorophyll significantly different between stable and ephemeral sites?(multivariate logistic regression)
+
+3.  How do chlorophyll levels impact light availability in the lower bay?
+
+*BONUS QUESTION: What other factors correlate with high/increased chlorophyll?
+
+MATTHEW
+4.	How do differences between daily high and low tides impact data
+
+5.	Are more extreme high and low tides associated with lower quantities of light scattering materials in the water column
+
+6.	Are lower average daily tidal ranges associated with higher levels of light scattering materials in the water column 
+
+BONUS: Correlation between temperature, salinity, and their impact on DO. Test for good data.
+
+BONUS: Forel-Ule color test comparing color trends between sites
+
+BONUS: Does increased distance from the harbor mouth negatively impact water quality factors [DO, turbidity, color, light availability PAR,]?
+
+
+Dependent		     Independent	       Test				     Purpose/description
+
+Turbidity		    ←	Depth	        	Regression	        	Observe if depth may correlate with some other variable ↑ NTU such as current		
+Color           ←	tide/depth    	ANOVA(2way???)	    	Indiv assessment of depth impact on color
+Chlorophyll     ←	Temperature	    Regression	        	Indiv assessment of Temp impact on chlorophyll
+Turbidity		    ←	|tide change|   Regression	        	Indiv assessment of tide change impact on NTU
+Light		        ←	Chlorophyll   	Regression		        Indiv assessment of chlorophyll impact on light
+Turbidity	    	←	Temp	        	Multiple Regression		Observe impact of environmental variables on turbidity
+
+
+
+# use data_join for all data related to chlorophyll and site data
+
+## 1 Is there an association between light availability and eelgrass bed stability? (ANOVA)
+```{r Create question dataset}
+all_data <- read.csv("NBWQ_Combined_RAW_Data20220224.csv")
+view(all_data)
+```
+
+Data Frame with all data, chlorophyll, tides, and NA omitted
+
+```{r}
+data_join_noNAPPFD <- filter(data_join, is.na(PPFD)==FALSE)
+```
+
+
+
+## 1. Outliers
+```{r boxplot}
+ggplot(data = data_join_noNAPPFD) + 
+ geom_boxplot(mapping = aes(x = Bed_Stability, y = PPFD))
+# outlier belongs to site 3, which has the highest average ppfd acriss transitional sites
+## It is among the closest transitional sites to the stable zone centered around Balboa Reach and Corona del Mar
+### because of this the outlier should remain.
+```
+Conduct an ANOVA to test for differences between treatments. 
+
+# Stuck here; na.omit() ?
+```{r}
+fit <- aov(PPFD ~ Bed_Stability, data = data_join_noNAPPFD) %>% na.omit()
+
+fitmodel <- lm(PPFD ~ Bed_Stability, data = data_join_noNAPPFD)
+
+anova(fitmodel)
+```
+
+## 2. Normality
+
+```{r Normality shapiro.test}
+# shapiro.test(data_join_noNAPPFD$PPFD)
+length(data_join_noNAPPFD)
+plot(fitmodel) #assumptions are checked
+```
+
+```{r Normality Graph}
+qqnorm(data_join$PPFD)
+qqline(data_join$PPFD)
+```
+
+### 3. homogeneity of variance
+
+```{r HOV plot}
+Q1model <- aov(PPFD ~ Bed_Stability, data = data_join)
+plot(Q1model, 1)
+```
+
+Repeated Measures 
+```{r}
+# library(rstatix)
+
+res.aov <- anova_test(data = data_join, dv = PPFD, wid = Site, within = c(Bed_Stability, Date))
+get_anova_table(res.aov)
+#ppfd changed over time. Repeated measures improve with more data tbd.
+```
+ 
+```{r HOV tests—functions}
+
+bartlett.test(PPFD~Bed_Stability, data=data_join)
+data_join %>% rstatix::levene_test(PPFD ~ Bed_Stability)
+ggqqplot(data_join_noNAPPFD, "PPFD", facet.by = "Bed_Stability")
+# library(ggpubr)
+
+# p-value > 0.05  ☑
+```
+```{r}
+ggplot(data_join, aes(x=PPFD)) +
+  geom_histogram() +
+  facet_wrap(Bed_Stability~.)
+```
+
+
+## Step 5: Conduct the statistical test
+
+```{r initial ANOVA}
+summary(Q1model)
+
+```
+
+
+## Step 6: Assess the output. Does it make sense? 
+
+
+1. Check our degrees of freedom. Do they make sense? 
+
+```{r degrees of freedom}
+nrow(Q1data) # n number of observations
+length(unique(Q1data$Bed_Stability)) # k number of groups
+
+# Expected df for Bed_Stability is k - 1
+length(unique(Q1data$Bed_Stability)) - 1
+
+# expected df for residuals is n - k
+40-2
+```
+
+## Step 7: Post-Hoc Test
+```{r Tukey Honest Significant Difference Test}
+TukeyHSD(Q1model)
+```
+
+## Step 8: Plot and annotate to show significance
+```{r create Q1 summary data-frame}
+#Use summarize to make a table of the mean and standard error at each Bed_Stability. 
+Q1_summary <- data_join %>% group_by(Bed_Stability) %>% 
+  summarize(mean = mean(PPFD), se = sd(PPFD)/sqrt(length(PPFD)))
+Q1_summary
+```
+
+
+# Regression graph of bed stability and light availability
+```{r visualization of means}
+ggplot(Q1_summary) + 
+  aes(x = "Bed_Stability", y = mean) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = (mean - se), ymax = (mean + se)), width = 0.2) +
+  labs(y = "PPFD", x = "bed stability")
+
+```
+
+```{r}
+all_data2 <- mutate(data_join, Stable = case_when(Bed_Stability == "Stable"~ 1, Bed_Stability == "Transitional"~0))
+       
+#glimpse(all_data2)
+#library(lme4)
+
+```
+```{r}
+mlr_PPFD_Stability <- ggplot(all_data2) + aes(x = PPFD, y = Stable) + geom_point()+ stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial),
+              col="red", lty=2)
+mlr_PPFD_Stability
+
+#probability (%) of finding a stable bed at x PPFD. Transition point. Does not control for repeated measures, the sites are measured multiple times, weather etc. but there is a significant difference.
+```
+```{r}
+
+#try other things besides PPFD!
+PPFD_Date_graph <- ggplot(data_join) +
+  aes(x = Date,
+      y = PPFD,
+      group = as.factor(Site),
+      label = as.character(Site),
+      color = as.factor(Bed_Stability)) +
+  geom_text() + geom_line()
+PPFD_Date_graph
+```
+```{r}
+# Chlorophyll
+
+
+Chlorophyll_Date_graph <- ggplot(data_join) +
+  aes(x = Date,
+      y = CorrectedConcentration.ug.L.,
+      group = as.factor(Site),
+      label = as.character(Site),
+      color = as.factor(CorrectedConcentration.ug.L.)) +
+  geom_text() + geom_line()
+Chlorophyll_Date_graph
+```
+
+
+
+# stepwise multiple logistic regression (book chapter)
+```{r}
+# model1 to include depth along with ppfd and date, model2 no depth
+
+model1 <- glm(Stable ~ PPFD + Depth_PAR + Date, data = data_join, family = binomial)
+model1
+model2 <- glm(Stable ~ PPFD+ Date, data = data_join, family = binomial)
+model2
+model3 <- glm(Stable ~ PPFD+ Date+ Turbidity_NTU, data = data_join, family = binomial)
+model4 <- glm(Stable ~ PPFD+ Date+ CorrectedConcentration_ug.L, data = data_join, family = binomial)
+#aic measures fit of model, lower score indicates better fit. Depth did not impact
+AIC(model1, model2, model3, model4)
+AIC(model1, model2, model4)
+```
+
+```{r}
+
+response_variables_data <- select(data_join, Stable, Turbidity_NTU, Temp_C, DO_mg.L, DO_percent, PPFD, CorrectedConcentration_ug.L)
+```
+
+```{r}
+#null model
+Stable_glm <- glm(Stable ~ 1, data= data_join, family=binomial)
+Stable_glm
+add1(Stable_glm, scope =response_variables_data) #test all variables
+```
+
+
+```{r}
+Stable_glm2 <- glm(Stable ~ PPFD, data= data_join, family=binomial)
+add1(Stable_glm2, scope =response_variables_data) #adds PPFD
+summary(Stable_glm2)
+```
+
+```{r}
+Stable_glm3 <- glm(Stable ~ PPFD + Turbidity_NTU, data= data_join, family=binomial)
+add1(Stable_glm3, scope =response_variables_data) #add turbidity
+summary(Stable_glm3) #not significant
+```
+
+```{r}
+Stable_glm4 <- glm(Stable ~ PPFD + CorrectedConcentration_ug.L, data= data_join, family=binomial)
+add1(Stable_glm4, scope =response_variables_data) #add chlorophyll
+summary(Stable_glm4) #not significant
+
+#so ppfd is the only significant factor. 
+```
+
+
+```{r}
+```
+
+
+```{r}
+date_PPFD_compare <- ggplot(data_join, aes(x = Date, y  = PPFD, fill = as.factor(Site)))+ geom_col(position="dodge")
+
+date_PPFD_compare2 <- ggplot(data_join, aes(x = as.factor(Site), y  = PPFD, fill = Date)) + geom_col(position = "dodge")
+#library(patchwork)
+date_PPFD_compare | date_PPFD_compare2
+
+date_PPFD_compare2
+```
+
+
+
+
+
+## 2 Are tempurature and chlorophyll significantly different between stable and transitional sites? 
+  Step 2a: Does temp predTideict chlorophyll level? Chlorophyll ~ Temperature (correlation)
+  Step 2b: Does temp predTideict stability? Stability ~ Temp (binary y/n)
+  Step 2c: Does chlorophyll predTideict stability? Stability ~ Chlorophyll (binary y/n)
+  #logistic regressions 
+```{r #2 }
+head(all_data)
+#glm(Bed_Stability ~ Temp_C + CorrectedConcentration_ug.L, data = data_join)
+```
+```{r}
+#fit2 <- aov(Bed_Stability ~ (Temp_C + CorrectedConcentration_ug.L), data = data_join)
+
+#fitmodel2 <- lm(Bed_Stability ~ Temp_C + CorrectedConcentration_ug.L, data = data_join)
+```
+
+
+
+
+## 3 How do chlorophyll levels impact light availability in the lower bay? (regular REGRESSION) (PPFD ~ chlorophyll)
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+## 4 How do differences between daily high and low tides impact [environmental variables]? (ordinal) (hard)
+```{r}
+
+
+```
+
+
+
+
+## 5 Are more extreme high and low tides associated with lower quantities of light scattering materials in the water column? (REGRESSION) 
+```{r}
+
+```
+
+
+
+
+## 6	Are lower average daily tidal ranges associated with higher levels of light scattering materials in the water column?
+```{r}
+```
+
+#Graphs
+##Daily data graphs
+
+```{r plot temp}
+TE<-ggplot(data_join, aes(y=Temp_C, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Tempurature (°C)")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+   coord_cartesian(ylim=(c(13,17)))+
+  scale_y_continuous(breaks=seq(13, 17, 0.5))+
+  theme(text = element_text(size = 20))
+TE
+```
+
+```{r plot DO}
+DO<-ggplot(data_join, aes(y=DO_mg.L, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Dissolved oxygen ", frac("mg O"[2], "L H"[2]*"O"))), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(7,10)))+
+  scale_y_continuous(breaks=seq(7, 10, 0.5))+
+  theme(text = element_text(size = 20))
+DO
+```
+
+```{r plot temp}
+PPFD<-ggplot(data_join, aes(y=PPFD, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("PPFD")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(50,1100)))+
+  scale_y_continuous(breaks=seq(0,1100, 250))+
+  theme(text = element_text(size = 20))
+PPFD
+```
+
+```{r plot FU color-category}
+FU<-ggplot(data_join, aes(y=ForelUleColorCategory, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Forel-Ule color category")), x = "Sample Site", fill = "Date")+
+  scale_fill_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme_classic()+
+   theme(axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30), legend.title=element_blank(), legend.text = element_text(size = 40))+
+  theme(text = element_text(size = 20))+
+  coord_cartesian(ylim=(c(1,5)))+
+  scale_y_continuous(breaks=seq(1, 5, 1))+
+  theme(text = element_text(size = 20))
+FU
+```
+
+```{r}
+CHLO<-ggplot(data_join, aes(y=CorrectedConcentration_ug.L, x=Site, fill=Date))+
+  geom_col(position = "dodge")+ 
+  labs(y = expression(paste("Chlo-a Concentration ", frac("µg", "L"))), x = "Bed Stability", fill = "Date")+
+  scale_fill_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(0.6,13)))+
+  scale_y_continuous(breaks=seq(0,13,2.5))+
+  theme(text = element_text(size = 20))
+CHLO
+```
+
+##multiplot function
+This is the definition of multiplot. It can take any number of plot objects as arguments, or if it can take a list of plot objects passed to plotlist.
+```{r Multiple Plot Funciton: multiplot}
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r NBWQ_DailySiteData}
+#this plot was designed for WQHD (2560x1440p) resolution
+#Also note that the graph was orignially made by pasting the legend with MS paint into a version without the legend to allow consistent graph sizes
+multiplot(TE,DO,PPFD,FU,CHLO, cols = 3)
+```
+
+##Averages Graphs
+
+```{r plot mean_temp}
+MTE<-ggplot(SummaryData, aes(y=mean_temp, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 3, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_temp - se_temp), ymax = (mean_temp + se_temp)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Tempurature (°C)")), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  #theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+   coord_cartesian(ylim=(c(13.17,17)))+
+  scale_y_continuous(breaks=seq(13, 17, 1))+
+  theme(text = element_text(size = 20))
+MTE
+```
+
+```{r plot mean_DO}
+MDO<-ggplot(SummaryData, aes(y=mean_DO, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 3, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_DO - se_DO), ymax = (mean_DO + se_DO)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Dissolved oxygen ", frac("mg O"[2], "L H"[2]*"O"))), x = "Bed stability", fill = "Date")+
+  scale_colour_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  #theme_classic()+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(7.14,10)))+
+  scale_y_continuous(breaks=seq(7, 10, 0.5))+
+  theme(text = element_text(size = 20))
+MDO
+```
+
+```{r plot mean_PPFD}
+MPPFD<-ggplot(SummaryData, aes(y=mean_PPFD, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 3, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_PPFD - se_PPFD), ymax = (mean_PPFD + se_PPFD)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("PPFD")), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(45,1000)))+
+  scale_y_continuous(breaks=seq(0,1000, 250))+
+  theme(text = element_text(size = 20))
+MPPFD
+```
+
+```{r plot median FU color-category}
+#I'm unsure how to do error bars for a discrete dataset, going to use SE for now
+MFU<-ggplot(SummaryData, aes(y=median_color, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 3, position = position_dodge(0.9))+
+  geom_errorbar(aes(ymin = (median_color - se_color), ymax = (median_color + se_color)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Forel-Ule color category")), x = "Bed Stability", fill = "Date", caption = "*points center on median color category")+
+  scale_colour_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  #theme_classic()+
+  theme(axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30), legend.title=element_blank(), legend.text = element_text(size = 40))+
+  coord_cartesian(ylim=(c(1.225,6)))+
+  scale_y_continuous(breaks=seq(1, 6, 1))+
+  theme(text = element_text(size = 20))
+MFU
+```
+
+```{r plot mean_CorConc}
+MCHLO<-ggplot(SummaryData, aes(y=mean_CorConc, x=Bed_Stability, fill=Date))+
+  geom_point(aes(colour = Date), size = 3, position = position_dodge(0.9))+ 
+  geom_errorbar(aes(ymin = (mean_CorConc - se_CorConc), ymax = (mean_CorConc + se_CorConc)), width = 0.2, position = position_dodge(0.9))+
+  labs(y = expression(paste("Chlo-a Concentration ", frac("µg", "L"))), x = "Bed Stability", fill = "Date")+
+  scale_colour_manual(values=c('#5b9bd6','#febe0f','#ed7893','#A9A9A9','#89d65e'))+
+  theme(legend.position="none", axis.title.x = element_text(size = 40), axis.text.x = element_text(size = 30), axis.title.y = element_text(size = 40), axis.text.y = element_text(size = 30))+
+  coord_cartesian(ylim=(c(0.45,10)))+
+  scale_y_continuous(breaks=seq(0,10, 2.5))+
+  theme(text = element_text(size = 20))
+MCHLO
+```
+
+```{r NBWQ_BedTypeAverages}
+#this plot was designed for WQHD (2560x1440p) resolution
+#Also note that the graph was orignially made by pasting the legend with MS paint into a version without the legend to allow consistent graph sizes
+multiplot(MTE,MDO,MPPFD,MFU,MCHLO, cols = 3)
+```

@@ -1,0 +1,290 @@
+---
+title: "NBWQ_MultiFactoralAnalysis20220302"
+author: "Matthew Walsh"
+date: "3/2/2022"
+output: html_document
+---
+
+```{r}
+list.of.packages <-
+  c("tidyverse", "FactoMineR", "factoextra")
+new.packages <-
+  list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+library("tidyverse")
+library("FactoMineR")
+library("factoextra")
+```
+
+
+```{r Making the data frame}
+load("NBWQ-FocalProject_Primary_20220220.Rdata")
+MFAdata <- data_join %>% select(c(Bed_Stability, Site, DateTime, Temp_C, DO_mg.L, `DO_%`, BottomDepth_ft, PredictedTide, TideChange, Turbidity_NTU, ForelUleColorCategory, CorrectedConcentration_ug.L, PPFD)) %>% na.omit()
+MFAdata$DateTime <- as.numeric(MFAdata$DateTime)
+```
+```{r}
+MFAdata<-rename(MFAdata,
+                 "Stability" = "Bed_Stability",
+                 "Turbidity" = "Turbidity_NTU",
+                 "Temp" = "Temp_C",
+                 "DO" = "DO_mg.L",
+                 "Depth" = "BottomDepth_ft",
+                 "Color" = "ForelUleColorCategory",
+                 "CHLA" = "CorrectedConcentration_ug.L",
+                 "Tide" = "PredictedTide",
+                 "ΔTide" = "TideChange")
+```
+
+## Data formatting
+```{r Making the MFA}
+# Variables must be grouped according to 2 factors, quantitative vs qualitative AND Active vs Supplementary (response variables I think) We don't really have enough 
+res.mfa <- MFA(MFAdata, 
+               group = c(2, 7, 3, 1), # specifies size of groups
+               type = c("n", "s", "s", "s"), # specifies group data type, 's' creates standardized as opposed to basic quantitative variables and is important if quantitative variables use different units.
+               name.group = c("Sample Site Constants", "Sampling Conditions", "OAC Indicators", "PPFD"), # assigns names for groupings
+               num.group.sup = c(1, 4), # specifies which groups are supplementary
+               graph = FALSE # binary deciding if a graph is produced
+               )
+```
+
+```{r MFA output}
+print(res.mfa) # unsure as to why this step is used, results seem the same regardless of inputs
+```
+
+##Visualization and Interpretation
+I gazed upon the analysis and wept tears of blood, for I knew my data, my statistics, my very research, my very data was doomed.
+https://www.youtube.com/watch?v=JY-ajPNQMh0
+Extended vers: https://www.youtube.com/watch?v=JWlwCRlVh7M
+
+We’ll use the factoextra R package to help in the interpretation and the visualization of the multiple factor analysis.
+
+The functions below [in factoextra package] will be used:
+
+• get_eigenvalue(res.mfa): Extract the eigenvalues/variances retained by each dimension (axis).
+• fviz_eig(res.mfa): Visualize the eigenvalues/variances.
+• get_mfa_ind(res.mfa): Extract the results for individuals.
+• get_mfa_var(res.mfa): Extract the results for quantitative and qualitative variables, as well as, for groups of variables.
+• fviz_mfa_ind(res.mfa), fviz_mfa_var(res.mfa): Visualize the results for individuals and variables, respectively.
+
+In the next sections, we’ll illustrate each of these functions.
+
+###Eigenvalues/Variances
+
+The proportion of variances retained by the different dimensions (axes) can be extracted using the function get_eigenvalue() [factoextra package] as follow:
+###Eigenvalues/Variances
+
+```{r eigenvalues extracting function}
+library("factoextra")
+eig.val <- get_eigenvalue(res.mfa)
+head(eig.val)
+```
+In multivariate statistics, a scree plot is a line plot of the eigenvalues of factors or principal components in an analysis. The scree plot is used to determine the number of factors to retain in an exploratory factor analysis (FA) or principal components to keep in a principal component analysis (PCA). - wikipedia☺
+```{r screeplot}
+fviz_screeplot(res.mfa)
+```
+### Variable Graphs
+```{r}
+group <- get_mfa_var(res.mfa, "group")
+group
+```
+
+The different components can be accessed as follow:
+
+```{r}
+# Coordinates of groups
+head(group$coord)
+# Cos2: quality of representation on the factore map
+head(group$cos2)
+# Contributions to the  dimensions
+head(group$contrib)
+```
+To plot the groups of variables, type this
+```{r plot of variable groups}
+fviz_mfa_var(res.mfa, "group")
+```
+• red color = active groups of variables
+• green color = supplementary groups of variables
+
+The plot above illustrates the correlation between groups and dimensions. The coordinates of the two active groups on the first dimension are almost identical. This means that they contribute similarly to the first dimension. Concerning the second dimension, the group OAC indicators has the highest coordinates indicating a highest contribution to the second dimension.
+
+To draw a bar plot of groups contribution to the dimensions, use the function fviz_contrib():
+
+```{r}
+# Contribution to the first dimension
+fviz_contrib(res.mfa, "group", axes = 1)
+# Contribution to the second dimension
+fviz_contrib(res.mfa, "group", axes = 2)
+```
+
+###Quantitative variables
+The function get_mfa_var() [in factoextra] is used to extract the results for quantitative variables. This function returns a list containing the coordinates, the cos2 and the contribution of variables:
+
+```{r}
+quanti.var <- get_mfa_var(res.mfa, "quanti.var")
+quanti.var 
+```
+
+In this section, we’ll describe how to visualize quantitative variables colored by groups. Next, we’ll highlight variables according to either i) their quality of representation on the factor map or ii) their contributions to the dimensions.
+
+For the sake of consistency, the groups will be colored as follows:
+Sample Site Constants:#00BFC4, Sampling Conditions:#C77CFF, OAC Indicators:#F8766D, PPFD:#7CAE00
+
+Correlation between quantitative variables and dimensions. The R code below plots quantitative variables colored by groups. The argument palette is used to change group colors (see ?ggpubr::ggpar for more information about palette). Supplementary quantitative variables are in dashed arrow and violet color. We use repel = TRUE, to avoid text overlapping.
+
+```{r}
+# best exported in a 4:5 resolution (512x640)
+##custom pallete doesn't seem to work for PPFD in this instance
+fviz_mfa_var(res.mfa, "quanti.var", palette = c("#F8766D", "#C77CFF"), 
+             col.var.sup = "#7CAE00", repel = TRUE)
+```
+
+To make the plot more readable, we can use geom = c(“point”, “text”) instead of geom = c(“arrow”, “text”). We’ll change also the legend position from “right” to “bottom”, using the argument legend = “bottom”:
+
+```{r}
+# best exported in a 4:5 resolution (512x640)
+fviz_mfa_var(res.mfa, "quanti.var", palette = c("#F8766D", "#C77CFF"), 
+             col.var.sup = "#7CAE00",
+               repel = TRUE,
+             geom = c("point", "text"), legend = "bottom")
+```
+
+Briefly, the graph of variables (correlation circle) shows the relationship between variables, the quality of the representation of variables, as well as, the correlation between variables and the dimensions:
+
+• Positive correlated variables are grouped together, whereas negative ones are positioned on opposite sides of the plot origin (opposed quadrants).
+
+• The distance between variable points and the origin measures the quality of the variable on the factor map. Variable points that are away from the origin are well represented on the factor map.
+
+• For a given dimension, the most correlated variables to the dimension are close to the dimension.
+
+For example, the first dimension represents background environmental readings at the sample sites: “intensity” and “harmony”. The most correlated variables to the second dimension are: i) Spice before shaking and Odor intensity before shaking for the odor group; ii) Spice, Plant and Odor intensity for the odor after shaking group and iii) Bitterness for the taste group. This dimension represents essentially the “spicyness” and the vegetal characteristic due to olfaction.
+
+The contribution of quantitative variables (in %) to the definition of the dimensions can be visualized using the function fviz_contrib() [factoextra package]. Variables are colored by groups. The R code below shows the top 20 variable categories contributing to the dimensions:
+
+```{r}
+# Contributions to dimension 1
+fviz_contrib(res.mfa, choice = "quanti.var", axes = 1, top = 20,
+             palette = c("#F8766D", "#C77CFF"))
+# Contributions to dimension 2
+fviz_contrib(res.mfa, choice = "quanti.var", axes = 2, top = 20,
+             palette = c("#F8766D", "#C77CFF"))
+```
+
+The red dashed line on the graph above indicates the expected average value, If the contributions were uniform. The calculation of the expected contribution value, under null hypothesis, has been detailed in the principal component analysis chapter (Chapter @ref(principal-component-analysis)).
+
+════════════════════════════════════════════════════════════════════════════════
+The variables with the larger value, contribute the most to the definition of the dimensions. Variables that contribute the most to Dim.1 and Dim.2 are the most important in explaining the variability in the data set.
+════════════════════════════════════════════════════════════════════════════════
+
+The most contributing quantitative variables can be highlighted on the scatter plot using the argument col.var = “contrib”. This produces a gradient colors, which can be customized using the argument gradient.cols.
+
+```{r}
+fviz_mfa_var(res.mfa, "quanti.var", col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             col.var.sup = "violet", repel = TRUE,
+             geom = c("point", "text"))
+```
+
+Similarly, you can highlight quantitative variables using their cos2 values representing the quality of representation on the factor map. If a variable is well represented by two dimensions, the sum of the cos2 is closed to one. For some of the row items, more than 2 dimensions might be required to perfectly represent the data.
+
+```{r}
+# Color by cos2 values: quality on the factor map
+fviz_mfa_var(res.mfa, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             col.var.sup = "violet", repel = TRUE)
+```
+
+To create a bar plot of variables cos2, type this:
+
+```{r}
+fviz_cos2(res.mfa, choice = "quanti.var", axes = 1)
+```
+
+###Graph of individuals
+To get the results for individuals, type this:
+```{r}
+ind <- get_mfa_ind(res.mfa)
+ind
+```
+
+To plot individuals, use the function fviz_mfa_ind() [in factoextra]. By default, individuals are colored in blue. However, like variables, it’s also possible to color individuals by their cos2 values:
+
+```{r}
+fviz_mfa_ind(res.mfa, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800"),
+             repel = TRUE)
+```
+
+════════════════════════════════════════════════════════════════════════════════
+In the plot above, the supplementary qualitative variable categories are shown in black. Env1, Env2, Env3 are the categories of the soil. Saumur, Bourgueuil and Chinon are the categories of the wine Label. If you don’t want to show them on the plot, use the argument invisible = “quali.var”.
+════════════════════════════════════════════════════════════════════════════════
+
+Individuals with similar profiles are close to each other on the factor map. The first axis, mainly opposes the wine 1DAM and, the wines 1VAU and 2ING. As described in the previous section, the first dimension represents the harmony and the intensity of wines. Thus, the wine 1DAM (positive coordinates) was evaluated as the most “intense” and “harmonious” contrary to wines 1VAU and 2ING (negative coordinates) which are the least “intense” and “harmonious”. The second axis is essentially associated with the two wines T1 and T2 characterized by a strong value of the variables Spice.before.shaking and Odor.intensity.before.shaking.
+
+Most of the supplementary qualitative variable categories are close to the origin of the map. This result indicates that the concerned categories are not related to the first axis (_________) or the second axis (_________).
+
+The category Env4 has high coordinates on the second axis related to T1 and T2.
+
+The category “Reference” is known to be related to an excellent wine-producing soil. As expected, our analysis demonstrates that the category “Reference” has high coordinates on the first axis, which is positively correlated with wines “intensity” and “harmony”.
+
+Note that, it’s possible to color the individuals using any of the qualitative variables in the initial data table. To do this, the argument habillage is used in the fviz_mfa_ind() function. For example, if you want to color the wines according to the supplementary qualitative variable “Label”, type this:
+
+```{r}
+fviz_mfa_ind(res.mfa, 
+             habillage = "Stability", # color by groups 
+             palette = c("#00AFBB", "#E7B800"),
+             addEllipses = TRUE, ellipse.type = "confidence", 
+             repel = TRUE # Avoid text overlapping
+             ) 
+```
+```{r}
+#fviz_ellipses(res.mfa, c("Bed_Stability", "Site"), repel = TRUE)
+```
+
+### Graph of partial individuals
+The results for individuals obtained from the analysis performed with a single group are named partial individuals. In other words, an individual considered from the point of view of a single group is called partial individual.
+
+In the default fviz_mfa_ind() plot, for a given individual, the point corresponds to the mean individual or the center of gravity of the partial points of the individual. That is, the individual viewed by all groups of variables.
+
+For a given individual, there are as many partial points as groups of variables.
+
+The graph of partial individuals represents each wine viewed by each group and its barycenter. To plot the partial points of all individuals, type this:
+
+```{r}
+fviz_mfa_ind(res.mfa, partial = "all") 
+```
+
+If you want to visualize partial points for wines of interest, let say c(“1DAM”, “1VAU”, “2ING”), use this:
+
+```{r}
+#This is clearly not working as intended, will need to do more on this in the future
+fviz_mfa_ind(res.mfa, partial = "Site") 
+```
+
+Red color represents the wines seen by only the odor variables; violet color represents the wines seen by only the visual variables, and so on.
+
+The wine 1DAM has been described in the previous section as particularly “intense” and “harmonious”, particularly by the odor group: It has a high coordinate on the first axis from the point of view of the odor variables group compared to the point of view of the other groups.
+
+From the odor group’s point of view, 2ING was more “intense” and “harmonious” than 1VAU but from the taste group’s point of view, 1VAU was more “intense” and “harmonious” than 2ING.
+
+### Graph of partial axes
+The graph of partial axes shows the relationship between the principal axes of the MFA and the ones obtained from analyzing each group using either a PCA (for groups of continuous variables) or a MCA (for qualitative variables).
+```{r}
+# best exported in a 4:5 resolution (512x640)
+fviz_mfa_axes(res.mfa)
+```
+This looks a bit cluttered, lets try it without including the 'Site' variable
+```{r}
+MFAdata2 <- MFAdata  %>%  select(-Site)
+res.mfa2 <- MFA(MFAdata2, 
+               group = c(1, 7, 3, 1),
+               type = c("n", "s", "s", "s"), 
+               name.group = c("Bed Stability", "Sampling Conditions", "OAC Indicators", "PPFD"),
+               num.group.sup = c(1, 4),
+               graph = FALSE
+               )
+fviz_mfa_axes(res.mfa2)
+```
+
+════════════════════════════════════════════════════════════════════════════════
+It can be seen that, he first dimension of each group is highly correlated to the MFA’s first one except, ironically the OAC indicators. The second dimension of the MFA is essentially correlated to the second dimension of the olfactory groups.
+══════════════════════════════════════════════════════════════════════
