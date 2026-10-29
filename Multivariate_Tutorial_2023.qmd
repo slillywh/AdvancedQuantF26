@@ -77,9 +77,9 @@ We have so far done our data cleaning by hand, but there are resources that can 
 
 First, we'll also use a few recipe steps to preprocess the data for PCA; namely, we need to:
 
--   remove any `NA` values,
--   center all predictors, and
--   scale all predictors.
+- remove any `NA` values,
+- center all predictors, and
+- scale all predictors.
 
 If you're interested in learning more about the recipes package, [this article](https://www.tidymodels.org/start/recipes/) is a good place to get started. For now, just run the next chunk:
 
@@ -266,5 +266,5 @@ So, Gentoos appear to just be giants, compared to the Adelie and Chinstrap pengu
 
 ## Other PCA resources
 
--   Michael Friendly's [multivariate palmerpenguins analysis](https://rpubs.com/friendly/penguin-biplots)
--   Julia Silge's [PCA and UMAP with tidymodels and #TidyTuesday cocktail recipes](https://juliasilge.com/blog/cocktail-recipes-umap/)
+- Michael Friendly's [multivariate palmerpenguins analysis](https://rpubs.com/friendly/penguin-biplots)
+- Julia Silge's [PCA and UMAP with tidymodels and #TidyTuesday cocktail recipes](https://juliasilge.com/blog/cocktail-recipes-umap/)

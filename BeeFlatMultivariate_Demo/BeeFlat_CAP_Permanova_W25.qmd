@@ -12,11 +12,11 @@ output: html_document
 
 ## Objectives:
 
--   Understand how univariate analyses are extended to the analysis of multiple response variables.
--   Use R to work with multivariate data such as environmental responses of multiple species.
--   Use R to perform several methods of ordination
-    -   NMDS
-    -   Canonical analysis of principal coordinates (CAP)
+- Understand how univariate analyses are extended to the analysis of multiple response variables.
+- Use R to work with multivariate data such as environmental responses of multiple species.
+- Use R to perform several methods of ordination
+  - NMDS
+  - Canonical analysis of principal coordinates (CAP)
 
 ```{r}
 ##  Load packages
@@ -50,11 +50,11 @@ Transects for community diversity were surveyed approximately annually at a numb
 
 Treatments:
 
--   Habitat Type: Perennial Grassland vs. CSS
+- Habitat Type: Perennial Grassland vs. CSS
 
--   Restoration method: Active, Passive, Control
+- Restoration method: Active, Passive, Control
 
-    -   In this experiment, control actually means reference, as they were nearby sites with "healthy" communities that were selected to compare against.
+  - In this experiment, control actually means reference, as they were nearby sites with "healthy" communities that were selected to compare against.
 
 After 10 years, IRC wanted to know whether the restoration was successful. Could we give them an answer using multivariate methods?
 
@@ -150,6 +150,7 @@ head(ZeroYr.sspfit_gg)
 ```
 
 Base R plot using the envfit() output:
+
 ```{r}
 # brackets make these lines run together - needs to for the plots to overlay
 {
@@ -161,16 +162,16 @@ ZeroYr.sspfit$plot
 ```
 
 GG Plot version :)
+
 ```{r}
 ZeroYr.sspfit_gg
 ```
 
-
 Conclusions:
 
--   Relative amount of BROHOR (*Bromus hordeaceus,* non-native grass) versus ISOMEN (*Isocoma menziesii*, native shrub) is good at separating transects
+- Relative amount of BROHOR (*Bromus hordeaceus,* non-native grass) versus ISOMEN (*Isocoma menziesii*, native shrub) is good at separating transects
 
--   BROSPP (unknown *Bromus* species) versus BRODIA (*Bromus diandrus*, non-native grass) is also good at separating transects
+- BROSPP (unknown *Bromus* species) versus BRODIA (*Bromus diandrus*, non-native grass) is also good at separating transects
 
 #### How to add a classification variable such as habitat for visualization
 
@@ -285,9 +286,9 @@ Looks like even though they're not well-differentiated visually, they are statis
 
 CAP is a constrained analysis, which means that it uses information about the environmental variables (in this case, our knowledge about the habitats) as a prior. Some additional definitions:
 
--   Borcard et al. - Simple (unconstrained) ordination analyses a single data matrix. Canonical (constrained) ordination associates two or more data sets.
+- Borcard et al. - Simple (unconstrained) ordination analyses a single data matrix. Canonical (constrained) ordination associates two or more data sets.
 
--   Ramette 2007 - “In constrained (canonical) ordination analyses, only the variation in the species table that can be explained by the environmental variables is displayed and analyzed, and not all the variation in the species table.” (This refers to asymmetrical methods only?)
+- Ramette 2007 - “In constrained (canonical) ordination analyses, only the variation in the species table that can be explained by the environmental variables is displayed and analyzed, and not all the variation in the species table.” (This refers to asymmetrical methods only?)
 
 It also allows for distance measures other than Euclidean (like PCA and PCoA) and does not make distributional assumptions.
 
@@ -312,7 +313,7 @@ We can run anova directly on our capscale output object.
 anova(Year0.cap) 
 ```
 
--   Permutation ANOVA also shows significant difference at start among habitats
+- Permutation ANOVA also shows significant difference at start among habitats
 
 #### Basic plots
 

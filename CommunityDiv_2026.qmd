@@ -49,10 +49,10 @@ library(vegan)
 We might have information about a community in a single sample. This dataframe has a lot of information about the taxa present in the sample, as well as counts of each taxon.
 
 ```{r}
-Freshies <- read.csv(file = "Demo Data Files/Freshwater_Invertebrates.csv")
+Freshies <- read.csv(file = "Freshwater_Invertebrates.csv")
 
 glimpse(Freshies)
-load("Demo Data Files/S4E2e.RData")
+load("S4E2e.RData")
 ```
 
 You might instead have no abundance information at all, but have information about multiple samples. These data give vascular plant species names for samples from 10 sites from a survey in Shropshire, UK.
@@ -79,6 +79,7 @@ ps
 
 ps |> class()
 
+t(ps)
 ```
 
 In this format, species are on the columns, sites/samples are on the rows. In the cells, 0 means that species was not found in that sample, while 1 means it was present. This particular dataset does not have abundance information, only presence/absence.
@@ -199,8 +200,10 @@ sprich <- ps |> colSums()
 
 vec <- colnames(ps)
 
-bind_cols(vec,shan_div, simp_div,sprich) |> 
-  rename(Site = `...1`, Shannon = `...2`, Simpson = `...3`, SpRich = `...4`) |>   separate(Site, into = c("Null","site", "UpperLower", "Rep"), sep = "")
+tibble(vec,shan_div, simp_div,sprich) |> 
+  separate(vec, into = c("Null","site", "UpperLower", "Rep"), sep = "")
+
+
 ```
 
 ## Similarity Indices
@@ -349,7 +352,7 @@ vegdist(antfire, method = "bray")
 What is a more powerful determinant of ant community, soil type or fire regime?
 
 ```{r}
-d <- dist(antfire, method = "euclidean")
+d <-dist(antfire, method = "euclidean")
 h <- hclust(d)
 plot(h)
 ```
